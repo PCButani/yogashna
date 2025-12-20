@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "yogashna",
+    "name": "Yogashna",
     "slug": "yogashna",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -13,9 +13,11 @@
       "backgroundColor": "#ffffff"
     },
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.dugmates.yogashna"
     },
     "android": {
+      "package": "com.dugmates.yogashna",
       "adaptiveIcon": {
         "foregroundImage": "./assets/adaptive-icon.png",
         "backgroundColor": "#ffffff"
