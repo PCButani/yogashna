@@ -1,344 +1,641 @@
-import React, { useMemo, useState, ComponentProps } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
   StyleSheet,
   SafeAreaView,
-  TextInput,
   ScrollView,
   TouchableOpacity,
   Image,
+  Dimensions,
+  Platform,
+  StatusBar,
+  TextInput,
+  FlatList,
 } from "react-native";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
-/* ---------- TYPES ---------- */
+const { width } = Dimensions.get("window");
 
+// ---------- Mock Data (replace with API later) ----------
 type LibraryItem = {
   id: string;
   title: string;
-  duration: string;
-  intensity: string;
-  type: string;
-  notes: string;
+  instructor: string;
+  description: string;
+  durationLabel: string; // "20 min" or "7 days"
+  rating: number; // 4.8
+  levelTag?: string; // "Gentle", "All Levels"
+  focusTag?: string; // "Better Sleep", "Flexibility"
+  thumbnail: string;
+  isFavorite?: boolean;
 };
 
-/* ---------- MOCK DATA (UI ONLY) ---------- */
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=900&q=80";
-
-const LIBRARY: LibraryItem[] = [
+const NEW_THIS_WEEK: LibraryItem[] = [
   {
-    id: "1",
-    title: "Morning Back Relief",
-    duration: "12 min",
-    intensity: "Gentle",
-    type: "Hatha",
-    notes: "Back pain, posture",
+    id: "nw1",
+    title: "Moon Salutation for Rest",
+    instructor: "Luna Nocturne",
+    description: "Prepare your body and mind for deep, relaxing sleep...",
+    durationLabel: "20 min",
+    rating: 4.8,
+    levelTag: "Gentle",
+    focusTag: "Better Sleep",
+    thumbnail:
+      "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+    isFavorite: false,
   },
   {
-    id: "2",
-    title: "Office Neck Reset",
-    duration: "8 min",
-    intensity: "Gentle",
-    type: "Chair Yoga",
-    notes: "Neck, shoulders",
-  },
-  {
-    id: "3",
-    title: "Deep Stretch Flow",
-    duration: "20 min",
-    intensity: "Moderate",
-    type: "Vinyasa",
-    notes: "Flexibility",
-  },
-  {
-    id: "4",
-    title: "Anulom Vilom",
-    duration: "6 min",
-    intensity: "Gentle",
-    type: "Pranayama",
-    notes: "Breathing, calm",
-  },
-  {
-    id: "5",
-    title: "Sleep Meditation",
-    duration: "10 min",
-    intensity: "Gentle",
-    type: "Meditation",
-    notes: "Sleep, relax",
+    id: "nw2",
+    title: "7-Day Flexibility Challenge",
+    instructor: "Multiple Teachers",
+    description: "Transform your flexibility in one week with daily sessions...",
+    durationLabel: "7 days",
+    rating: 4.8,
+    levelTag: "All Levels",
+    focusTag: "Flexibility",
+    thumbnail:
+      "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+    isFavorite: true,
   },
 ];
 
-/* ---------- COLLECTIONS ---------- */
-
-const COLLECTIONS: {
-  key: string;
-  title: string;
-  icon: string;
-  filter: (it: LibraryItem) => boolean;
-}[] = [
+const MORE_FOR_YOU: LibraryItem[] = [
   {
-    key: "featured",
-    title: "Featured for You",
-    icon: "sparkles-outline",
-    filter: () => true,
+    id: "m1",
+    title: "Hip Opening Flow",
+    instructor: "Willow Grace",
+    description: "Unwind tight hips and lower back tension with a gentle flow...",
+    durationLabel: "18 min",
+    rating: 4.7,
+    levelTag: "Gentle",
+    focusTag: "Mobility",
+    thumbnail:
+      "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
+    isFavorite: false,
   },
   {
-    key: "back",
-    title: "Back Pain Relief",
-    icon: "body-outline",
-    filter: (it) => /back|posture/i.test(it.notes),
-  },
-  {
-    key: "breathing",
-    title: "Breathing",
-    icon: "wind-outline",
-    filter: (it) => it.type === "Pranayama",
-  },
-  {
-    key: "meditation",
-    title: "Meditation",
-    icon: "heart-outline",
-    filter: (it) => it.type === "Meditation",
-  },
-  {
-    key: "office",
-    title: "Office Reset",
-    icon: "briefcase-outline",
-    filter: (it) => it.type === "Chair Yoga",
+    id: "m2",
+    title: "Breath Reset",
+    instructor: "Ari Sol",
+    description: "A calming breath practice for stress relief and better focus...",
+    durationLabel: "6 min",
+    rating: 4.9,
+    levelTag: "Beginner",
+    focusTag: "Calm",
+    thumbnail:
+      "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+    isFavorite: false,
   },
 ];
 
-/* ---------- TOP FILTERS ---------- */
+// ---------- Shadow helper (same as dashboard) ----------
+const shadow = (elevation = 3) =>
+  Platform.select({
+    android: { elevation },
+    ios: {
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+    },
+    default: {},
+  });
 
-const TOP_FILTERS: {
-  key: string;
-  label: string;
-  icon: string;
-}[] = [
-  { key: "all", label: "All", icon: "apps-outline" },
-  { key: "yoga", label: "Yoga", icon: "body-outline" },
-  { key: "breath", label: "Breathing", icon: "wind-outline" },
-  { key: "med", label: "Meditation", icon: "heart-outline" },
-  { key: "office", label: "Office", icon: "briefcase-outline" },
-];
-
-/* ---------- SCREEN ---------- */
-
+// ---------- Screen ----------
 export default function LibraryScreen() {
   const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState("all");
+  const [activeFilter, setActiveFilter] = useState<
+    "All" | "Yoga" | "Breathing" | "Meditation" | "Challenges"
+  >("All");
 
-  const filtered = useMemo(() => {
-    return LIBRARY.filter((it) => {
-      if (query && !it.title.toLowerCase().includes(query.toLowerCase()))
-        return false;
+  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
+    const seed: Record<string, boolean> = {};
+    [...NEW_THIS_WEEK, ...MORE_FOR_YOU].forEach((x) => {
+      seed[x.id] = !!x.isFavorite;
+    });
+    return seed;
+  });
 
-      if (activeFilter === "breath") return it.type === "Pranayama";
-      if (activeFilter === "med") return it.type === "Meditation";
-      if (activeFilter === "office") return it.type === "Chair Yoga";
+  const filteredNew = useMemo(() => {
+    const q = query.trim().toLowerCase();
 
-      return true;
+    // This filter is intentionally simple for now.
+    // Later: match activeFilter to item categories from API.
+    return NEW_THIS_WEEK.filter((x) => {
+      const hay = `${x.title} ${x.instructor} ${x.description} ${x.levelTag ?? ""} ${
+        x.focusTag ?? ""
+      }`.toLowerCase();
+      const qOk = q.length === 0 || hay.includes(q);
+      const filterOk = activeFilter === "All" ? true : true;
+      return qOk && filterOk;
     });
   }, [query, activeFilter]);
 
+  const filteredMore = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    return MORE_FOR_YOU.filter((x) => {
+      const hay = `${x.title} ${x.instructor} ${x.description} ${x.levelTag ?? ""} ${
+        x.focusTag ?? ""
+      }`.toLowerCase();
+      const qOk = q.length === 0 || hay.includes(q);
+      const filterOk = activeFilter === "All" ? true : true;
+      return qOk && filterOk;
+    });
+  }, [query, activeFilter]);
+
+  const toggleFav = (id: string) => {
+    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Header */}
-        <Text style={styles.title}>Library</Text>
-        <Text style={styles.subtitle}>
-          Explore yoga, breathing & mindfulness
-        </Text>
+      <View style={styles.statusBarSpacer} />
 
-        {/* Search */}
-        <View style={styles.searchBox}>
-          <Ionicons name="search-outline" size={18} color="#6B7280" />
-          <TextInput
-            placeholder="Search practices"
-            placeholderTextColor="#9CA3AF"
-            style={styles.searchInput}
-            value={query}
-            onChangeText={setQuery}
-          />
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.container}
+      >
+        {/* HEADER */}
+        <View style={styles.header}>
+          <View>
+            <Text style={styles.title}>Library</Text>
+            <Text style={styles.subtitle}>
+              Find your next practice — without scrolling forever
+            </Text>
+          </View>
+
+          <TouchableOpacity style={styles.iconBtn} activeOpacity={0.85}>
+            <Ionicons name="options-outline" size={20} color="#111" />
+          </TouchableOpacity>
         </View>
 
-        {/* Filters */}
-        <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-          <View style={styles.filtersRow}>
-            {TOP_FILTERS.map((f) => {
-              const selected = activeFilter === f.key;
-              return (
-                <TouchableOpacity
-                  key={f.key}
-                  onPress={() => setActiveFilter(f.key)}
-                  style={[
-                    styles.filterChip,
-                    selected && styles.filterChipActive,
-                  ]}
-                >
-                  <Ionicons
-                    name={f.icon as any}
-                    size={16}
-                    color={selected ? "#1F6F57" : "#6B7280"}
-                  />
-                  <Text
-                    style={[
-                      styles.filterText,
-                      selected && styles.filterTextActive,
-                    ]}
-                  >
-                    {f.label}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
+        {/* SEARCH */}
+        <View style={styles.searchWrap}>
+          <Ionicons name="search-outline" size={18} color="#718096" />
+          <TextInput
+            value={query}
+            onChangeText={setQuery}
+            placeholder="Search yoga, breathing, sleep..."
+            placeholderTextColor="#A0AEC0"
+            style={styles.searchInput}
+            returnKeyType="search"
+          />
+          {!!query && (
+            <TouchableOpacity
+              onPress={() => setQuery("")}
+              style={styles.clearBtn}
+              hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            >
+              <Ionicons name="close-circle" size={18} color="#A0AEC0" />
+            </TouchableOpacity>
+          )}
+        </View>
+
+        {/* FILTER PILLS */}
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
+        >
+          <FilterPill
+            label="All"
+            active={activeFilter === "All"}
+            onPress={() => setActiveFilter("All")}
+          />
+          <FilterPill
+            label="Yoga"
+            active={activeFilter === "Yoga"}
+            onPress={() => setActiveFilter("Yoga")}
+          />
+          <FilterPill
+            label="Breathing"
+            active={activeFilter === "Breathing"}
+            onPress={() => setActiveFilter("Breathing")}
+          />
+          <FilterPill
+            label="Meditation"
+            active={activeFilter === "Meditation"}
+            onPress={() => setActiveFilter("Meditation")}
+          />
+          <FilterPill
+            label="Challenges"
+            active={activeFilter === "Challenges"}
+            onPress={() => setActiveFilter("Challenges")}
+          />
         </ScrollView>
 
-        {/* Sections */}
-        {COLLECTIONS.map((section) => {
-          const items = filtered.filter(section.filter);
-          if (!items.length) return null;
+        {/* NEW THIS WEEK */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>New This Week</Text>
+        </View>
 
-          return (
-            <View key={section.key} style={styles.section}>
-              <View style={styles.sectionHeader}>
-                <View style={styles.sectionTitleRow}>
-                  <Ionicons name={section.icon as any} size={18} color="#2E6B4F" />
-                  <Text style={styles.sectionTitle}>{section.title}</Text>
-                </View>
-              </View>
+        <FlatList
+          data={filteredNew}
+          keyExtractor={(item) => item.id}
+          numColumns={2}
+          columnWrapperStyle={styles.gridRow}
+          scrollEnabled={false}
+          renderItem={({ item }) => (
+            <VideoInfoCard
+              item={item}
+              isFavorite={!!favorites[item.id]}
+              onToggleFavorite={() => toggleFav(item.id)}
+              onPress={() => {
+                // TODO: navigate to details/player
+              }}
+            />
+          )}
+        />
 
-              <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-                {items.map((item) => (
-                  <VideoCard key={item.id} item={item} />
-                ))}
-              </ScrollView>
-            </View>
-          );
-        })}
+        {/* MORE FOR YOU (Optional section, compact + less images) */}
+        <View style={[styles.sectionHeader, { marginTop: 10 }]}>
+          <Text style={styles.sectionTitle}>Recommended For You</Text>
+        </View>
 
-        <View style={{ height: 100 }} />
+        {filteredMore.map((item) => (
+          <CompactVideoRow
+            key={item.id}
+            item={item}
+            isFavorite={!!favorites[item.id]}
+            onToggleFavorite={() => toggleFav(item.id)}
+            onPress={() => {
+              // TODO: navigate to details/player
+            }}
+          />
+        ))}
+
+        <View style={{ height: 28 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ---------- CARD ---------- */
-
-function VideoCard({ item }: { item: LibraryItem }) {
+// ---------- Components ----------
+function FilterPill({
+  label,
+  active,
+  onPress,
+}: {
+  label: string;
+  active: boolean;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity activeOpacity={0.9} style={styles.card}>
-      <View style={styles.thumb}>
-        <Image source={{ uri: FALLBACK_IMAGE }} style={styles.image} />
-        <View style={styles.playBtn}>
-          <Ionicons name="play" size={16} color="#1F6F57" />
-        </View>
-      </View>
-
-      <Text style={styles.cardTitle} numberOfLines={1}>
-        {item.title}
-      </Text>
-      <Text style={styles.cardSub}>
-        {item.duration} • {item.intensity}
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.pill, active ? styles.pillActive : styles.pillIdle]}
+    >
+      <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextIdle]}>
+        {label}
       </Text>
     </TouchableOpacity>
   );
 }
 
-/* ---------- STYLES ---------- */
+function VideoInfoCard({
+  item,
+  isFavorite,
+  onToggleFavorite,
+  onPress,
+}: {
+  item: LibraryItem;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity activeOpacity={0.9} style={styles.card} onPress={onPress}>
+      {/* Thumbnail */}
+      <View style={styles.thumbWrap}>
+        <Image source={{ uri: item.thumbnail }} style={styles.thumb} />
+
+        {/* Heart */}
+        <TouchableOpacity
+          onPress={onToggleFavorite}
+          activeOpacity={0.85}
+          style={styles.heartBtn}
+          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+        >
+          <Ionicons
+            name={isFavorite ? "heart" : "heart-outline"}
+            size={18}
+            color={isFavorite ? "#E53E3E" : "#FFFFFF"}
+          />
+        </TouchableOpacity>
+
+        {/* Play */}
+        <View style={styles.playOverlay}>
+          <Ionicons name="play" size={20} color="#FFF" />
+        </View>
+
+        {/* Bottom stats row */}
+        <View style={styles.cardBottomOverlay}>
+          <View style={styles.statPill}>
+            <Ionicons name="time-outline" size={14} color="#FFF" />
+            <Text style={styles.statText}>{item.durationLabel}</Text>
+          </View>
+
+          <View style={[styles.statPill, { marginLeft: 8 }]}>
+            <Ionicons name="star" size={14} color="#F6AD55" />
+            <Text style={styles.statText}>{item.rating.toFixed(1)}</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Text content */}
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle} numberOfLines={2}>
+          {item.title}
+        </Text>
+
+        <Text style={styles.cardInstructor} numberOfLines={1}>
+          with {item.instructor}
+        </Text>
+
+        <Text style={styles.cardDesc} numberOfLines={2}>
+          {item.description}
+        </Text>
+
+        <View style={styles.tagRow}>
+          {!!item.levelTag && (
+            <View style={[styles.chip, styles.chipGreen]}>
+              <Text style={[styles.chipText, styles.chipGreenText]}>{item.levelTag}</Text>
+            </View>
+          )}
+          {!!item.focusTag && (
+            <View style={[styles.chip, styles.chipBlue]}>
+              <Text style={[styles.chipText, styles.chipBlueText]}>{item.focusTag}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function CompactVideoRow({
+  item,
+  isFavorite,
+  onToggleFavorite,
+  onPress,
+}: {
+  item: LibraryItem;
+  isFavorite: boolean;
+  onToggleFavorite: () => void;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity style={styles.rowCard} activeOpacity={0.9} onPress={onPress}>
+      <View style={styles.rowThumbWrap}>
+        <Image source={{ uri: item.thumbnail }} style={styles.rowThumb} />
+        <View style={styles.rowPlayOverlay}>
+          <Ionicons name="play" size={16} color="#FFF" />
+        </View>
+      </View>
+
+      <View style={styles.rowInfo}>
+        <Text style={styles.rowTitle} numberOfLines={1}>
+          {item.title}
+        </Text>
+        <Text style={styles.rowSub} numberOfLines={1}>
+          with {item.instructor}
+        </Text>
+
+        <View style={styles.rowMeta}>
+          <View style={styles.rowMetaItem}>
+            <Ionicons name="time-outline" size={14} color="#718096" />
+            <Text style={styles.rowMetaText}>{item.durationLabel}</Text>
+          </View>
+          <View style={[styles.rowMetaItem, { marginLeft: 12 }]}>
+            <Ionicons name="star" size={14} color="#F6AD55" />
+            <Text style={styles.rowMetaText}>{item.rating.toFixed(1)}</Text>
+          </View>
+        </View>
+      </View>
+
+      <TouchableOpacity
+        onPress={onToggleFavorite}
+        activeOpacity={0.85}
+        style={styles.rowFavBtn}
+        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+      >
+        <Ionicons
+          name={isFavorite ? "heart" : "heart-outline"}
+          size={18}
+          color={isFavorite ? "#E53E3E" : "#A0AEC0"}
+        />
+      </TouchableOpacity>
+    </TouchableOpacity>
+  );
+}
+
+// ---------- Styles (Aligned with TodayDashboard) ----------
+const CARD_GAP = 14;
+const CARD_W = (width - 40 - CARD_GAP) / 2; // paddingHorizontal=20 each side
 
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#FFFFFF" },
-  container: { padding: 18 },
-
-  title: {
-    fontSize: 26,
-    fontWeight: "900",
-    color: "#111827",
+  safe: { flex: 1, backgroundColor: "#FBFBFB" },
+  statusBarSpacer: {
+    height: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0,
   },
-  subtitle: {
-    fontSize: 14,
-    color: "#6B7280",
-    marginTop: 6,
-    marginBottom: 12,
+  container: { paddingHorizontal: 20, paddingTop: 14, paddingBottom: 18 },
+
+  header: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: 14,
+  },
+  title: { fontSize: 26, fontWeight: "900", color: "#2D3748" },
+  subtitle: { fontSize: 14, color: "#718096", marginTop: 4, fontWeight: "600" },
+
+  iconBtn: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFF",
+    alignItems: "center",
+    justifyContent: "center",
+    ...shadow(2),
   },
 
-  searchBox: {
+  searchWrap: {
+    backgroundColor: "#FFF",
+    borderRadius: 18,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
     flexDirection: "row",
     alignItems: "center",
-    backgroundColor: "#F7FAF8",
-    borderRadius: 16,
-    paddingHorizontal: 12,
+    ...shadow(2),
+  },
+  searchInput: {
+    flex: 1,
+    marginLeft: 10,
+    fontSize: 15,
+    color: "#2D3748",
+    fontWeight: "600",
+    paddingVertical: 0,
+  },
+  clearBtn: { paddingLeft: 6 },
+
+  filterRow: {
+    paddingVertical: 14,
+    paddingRight: 20,
+  },
+  pill: {
+    paddingHorizontal: 14,
     paddingVertical: 10,
-    borderWidth: 1,
-    borderColor: "#E6EFE9",
-    gap: 10,
-    marginBottom: 12,
-  },
-  searchInput: { flex: 1, fontSize: 14, color: "#111827" },
-
-  filtersRow: { flexDirection: "row", gap: 10, marginBottom: 8 },
-  filterChip: {
-    flexDirection: "row",
-    gap: 6,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
     borderRadius: 999,
+    marginRight: 10,
     borderWidth: 1,
-    borderColor: "#E6EFE9",
-    backgroundColor: "#F7FAF8",
   },
-  filterChipActive: {
-    backgroundColor: "#EAF6F0",
-    borderColor: "#BFDCCF",
-  },
-  filterText: { fontSize: 13, fontWeight: "700", color: "#6B7280" },
-  filterTextActive: { color: "#1F6F57" },
+  pillIdle: { backgroundColor: "#FFF", borderColor: "#E2E8F0" },
+  pillActive: { backgroundColor: "#E9A46A", borderColor: "#E9A46A" },
+  pillText: { fontSize: 13, fontWeight: "800" },
+  pillTextIdle: { color: "#2D3748" },
+  pillTextActive: { color: "#FFF" },
 
-  section: { marginTop: 20 },
-  sectionHeader: { marginBottom: 10 },
-  sectionTitleRow: {
+  sectionHeader: {
+    marginTop: 4,
+    marginBottom: 12,
     flexDirection: "row",
-    gap: 8,
     alignItems: "center",
+    justifyContent: "space-between",
   },
-  sectionTitle: {
-    fontSize: 16,
-    fontWeight: "900",
-    color: "#111827",
+  sectionTitle: { fontSize: 20, fontWeight: "900", color: "#2D3748" },
+
+  gridRow: {
+    justifyContent: "space-between",
+    marginBottom: 14,
   },
 
-  card: { width: 160, marginRight: 14 },
-  thumb: {
-    height: 100,
-    borderRadius: 16,
+  // Big grid card
+  card: {
+    width: CARD_W,
+    backgroundColor: "#FFF",
+    borderRadius: 24,
     overflow: "hidden",
-    backgroundColor: "#EEE",
+    ...shadow(2),
   },
-  image: { width: "100%", height: "100%" },
-  playBtn: {
+
+  thumbWrap: {
+    height: 165,
+    backgroundColor: "#EDF2F7",
+  },
+  thumb: { width: "100%", height: "100%" },
+
+  heartBtn: {
     position: "absolute",
-    right: 10,
-    bottom: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: "#FFFFFF",
+    right: 12,
+    top: 12,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: "rgba(0,0,0,0.18)",
     alignItems: "center",
     justifyContent: "center",
   },
-  cardTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    marginTop: 8,
-    color: "#111827",
+
+  playOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  cardSub: {
+  cardBottomOverlay: {
+    position: "absolute",
+    left: 12,
+    right: 12,
+    bottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statPill: {
+    backgroundColor: "rgba(0,0,0,0.35)",
+    borderRadius: 999,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  statText: {
+    marginLeft: 6,
+    color: "#FFF",
     fontSize: 12,
-    color: "#6B7280",
-    marginTop: 2,
+    fontWeight: "900",
+  },
+
+  cardContent: {
+    padding: 14,
+    paddingTop: 12,
+  },
+  cardTitle: { fontSize: 16, fontWeight: "900", color: "#2D3748" },
+  cardInstructor: { marginTop: 6, fontSize: 13, color: "#718096", fontWeight: "700" },
+  cardDesc: { marginTop: 10, fontSize: 13, color: "#718096", lineHeight: 18, fontWeight: "600" },
+
+  tagRow: { flexDirection: "row", marginTop: 12, flexWrap: "wrap", gap: 8 },
+  chip: {
+    paddingHorizontal: 12,
+    paddingVertical: 7,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  chipText: { fontSize: 12, fontWeight: "900" },
+
+  chipGreen: { backgroundColor: "#EEF7F0", borderColor: "#CFE8D5" },
+  chipGreenText: { color: "#79A16B" },
+
+  chipBlue: { backgroundColor: "#EAF4FB", borderColor: "#CFE3F2" },
+  chipBlueText: { color: "#5B8FAF" },
+
+  // Compact rows (less image-heavy)
+  rowCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 22,
+    padding: 14,
+    marginBottom: 12,
+    flexDirection: "row",
+    alignItems: "center",
+    ...shadow(2),
+  },
+  rowThumbWrap: {
+    width: 74,
+    height: 54,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginRight: 12,
+    backgroundColor: "#EDF2F7",
+  },
+  rowThumb: { width: "100%", height: "100%" },
+  rowPlayOverlay: {
+    position: "absolute",
+    left: 0,
+    right: 0,
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.18)",
+  },
+  rowInfo: { flex: 1 },
+  rowTitle: { fontSize: 16, fontWeight: "900", color: "#2D3748" },
+  rowSub: { marginTop: 4, fontSize: 13, color: "#718096", fontWeight: "700" },
+  rowMeta: { flexDirection: "row", alignItems: "center", marginTop: 10 },
+  rowMetaItem: { flexDirection: "row", alignItems: "center" },
+  rowMetaText: { marginLeft: 6, fontSize: 12, color: "#718096", fontWeight: "700" },
+
+  rowFavBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    alignItems: "center",
+    justifyContent: "center",
+    marginLeft: 10,
+    backgroundColor: "#F8F9FA",
   },
 });

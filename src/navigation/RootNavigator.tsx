@@ -13,6 +13,8 @@ import PlanSummaryScreen from "../screens/SignupOnboarding/PlanSummaryScreen";
 import AboutYouScreen from "../screens/SignupOnboarding/AboutYouScreen";
 import TodayScreen from "../screens/Dashboard/TodayScreen";
 import MainTabsNavigator from "./MainTabsNavigator";
+import WellnessGoalsScreen from "../screens/Library/WellnessGoalsScreen";
+
 
 
 
@@ -38,6 +40,7 @@ export default function RootNavigator() {
           <Stack.Screen name="PlanSummary" component={PlanSummaryScreen} />
           <Stack.Screen name="Login" component={LoginScreen} />
           <Stack.Screen name="Today" component={TodayScreen} />
+          <Stack.Screen name="WellnessGoals" component={WellnessGoalsScreen} />
           <Stack.Screen name="MainTabs" component={MainTabsNavigator} />
         </Stack.Navigator>
       </NavigationContainer>

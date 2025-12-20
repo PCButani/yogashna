@@ -102,7 +102,6 @@ export default function OnboardingScreen() {
 }
 
 const PRIMARY = "#E2A365";
-const ACCENT = "#4F9D7F";
 
 const styles = StyleSheet.create({
   bg: { flex: 1 },

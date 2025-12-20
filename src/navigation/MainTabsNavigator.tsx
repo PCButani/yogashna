@@ -16,6 +16,8 @@ type MainTabParamList = {
   Profile: undefined;
 };
 
+type TabIconName = "home-outline" | "grid-outline" | "play-circle-outline" | "bar-chart-outline" | "person-outline";
+
 const Tab = createBottomTabNavigator<MainTabParamList>();
 
 export default function MainTabsNavigator() {
@@ -33,8 +35,8 @@ export default function MainTabsNavigator() {
           paddingBottom: 10,
           paddingTop: 8,
         },
-        tabBarIcon: ({ focused, color, size }) => {
-          let iconName: any = "home-outline";
+        tabBarIcon: ({ focused }) => {
+          let iconName: TabIconName = "home-outline";
 
           if (route.name === "Today") iconName = "home-outline";
           if (route.name === "Library") iconName = "grid-outline";

@@ -7,343 +7,651 @@ import {
   ScrollView,
   TouchableOpacity,
   Image,
+  Dimensions,
+  Platform,
+  StatusBar,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+} from "@expo/vector-icons";
+import { LinearGradient } from "expo-linear-gradient";
 import { useSignupOnboarding } from "../../data/onboarding/SignupOnboardingContext";
 
+const { width } = Dimensions.get("window");
+
+// Images
 const HERO_IMG =
   "https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=1200&q=80";
 
-const CW_1 =
-  "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80";
-const CW_2 =
-  "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=900&q=80";
+const CONTINUE_THUMB =
+  "https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=800&q=80";
+
+const HERO_DESC =
+  "Awaken your body and mind with gentle flowing movements that honor the sunrise within you ☀️";
+
+// Cross-platform shadow
+const shadow = (elevation = 3) =>
+  Platform.select({
+    android: { elevation },
+    ios: {
+      shadowColor: "#000",
+      shadowOpacity: 0.08,
+      shadowRadius: 12,
+      shadowOffset: { width: 0, height: 8 },
+    },
+    default: {},
+  });
 
 export default function TodayScreen() {
   const onboarding = useSignupOnboarding() as any;
-
   const focus =
-    onboarding?.state?.wellnessFocus ??
-    onboarding?.wellnessFocus ??
-    "Wellness";
+    onboarding?.state?.wellnessFocus ?? onboarding?.wellnessFocus ?? "Wellness";
 
   return (
     <SafeAreaView style={styles.safe}>
-      <ScrollView contentContainerStyle={styles.container}>
-        {/* Header */}
+      <View style={styles.statusBarSpacer} />
+
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.container}
+      >
+        {/* 1. HEADER */}
         <View style={styles.header}>
-          <Text style={styles.greeting}>Good Morning 🌿</Text>
-          <Text style={styles.subGreeting}>
-            Let’s take care of your body and mind today
-          </Text>
+          <View>
+            <Text style={styles.greeting}>Good evening, there 🌙</Text>
+            <Text style={styles.subGreeting}>
+              Today's Strength flow is ready
+            </Text>
+          </View>
+
+          <TouchableOpacity
+            style={styles.notificationCircle}
+            activeOpacity={0.8}
+            accessibilityRole="button"
+            accessibilityLabel="Notifications"
+          >
+            <Ionicons name="notifications-outline" size={22} color="#111" />
+          </TouchableOpacity>
         </View>
 
-        {/* HERO CARD */}
+        {/* 2. HERO CARD (with missing description added + title overlay like design) */}
         <View style={styles.heroCard}>
-          <Image source={{ uri: HERO_IMG }} style={styles.heroImg} />
-          <View style={styles.heroOverlay} />
+          <View style={styles.cardHeader}>
+            <View style={styles.iconCircle}>
+              <Ionicons name="sunny-outline" size={18} color="#2E6B4F" />
+            </View>
+            <View style={{ flex: 1 }}>
+              <Text style={styles.cardTag}>Today's Practice</Text>
+              <Text style={styles.cardRecText}>
+                Recommended for you • Focus: {String(focus)}
+              </Text>
+            </View>
+          </View>
 
-          <View style={styles.heroContent}>
-            {/* Chips */}
-            <View style={styles.heroChipsRow}>
-              <View style={styles.heroChip}>
-                <Text style={styles.heroChipText}>{focus}</Text>
+          <View style={styles.heroImageContainer}>
+            <Image source={{ uri: HERO_IMG }} style={styles.heroImg} />
+
+            {/* Tags */}
+            <View style={styles.imageOverlayTags}>
+              <View style={styles.glassTag}>
+                <Text style={styles.tagText}>Gentle</Text>
               </View>
-              <View style={styles.heroChipLight}>
-                <Text style={styles.heroChipLightText}>Beginner</Text>
+              <View style={styles.accentTag}>
+                <Text style={styles.tagText}>20 min</Text>
               </View>
             </View>
 
-            {/* Text */}
-            <View>
-              <Text style={styles.heroTitle}>Today’s Practice</Text>
-              <Text style={styles.heroMeta}>
-                12 min Back Stretch + 5 min Breathing
+            {/* Overlay text (like your screenshot) */}
+            <View style={styles.heroImageTextOverlay}>
+              <Text style={styles.heroOverlayTitle}>
+                Morning Sun Salutation Flow
               </Text>
-              <Text style={styles.heroMetaSub}>
-                Total: 17 min • Gentle pace
-              </Text>
+              <Text style={styles.heroOverlaySub}>with Luna Rivers</Text>
+            </View>
+          </View>
+
+          {/* ✅ Missing info/description added */}
+          <Text style={styles.heroDescription}>{HERO_DESC}</Text>
+
+          <TouchableOpacity activeOpacity={0.9} style={styles.primaryBtn}>
+            <Ionicons
+              name="play-circle"
+              size={20}
+              color="#FFF"
+              style={{ marginRight: 8 }}
+            />
+            <Text style={styles.primaryBtnText}>Start Practice</Text>
+          </TouchableOpacity>
+        </View>
+
+        {/* 3. CONTINUE WATCHING (added) */}
+        <View style={styles.continueCard}>
+          <View style={styles.continueHeader}>
+            <View style={styles.row}>
+              <MaterialCommunityIcons
+                name="bookmark-outline"
+                size={20}
+                color="#F2994A"
+              />
+              <Text style={styles.continueTitle}>Continue Watching</Text>
+            </View>
+          </View>
+
+          <View style={styles.continueBody}>
+            <View style={styles.continueThumbWrap}>
+              <Image source={{ uri: CONTINUE_THUMB }} style={styles.continueThumb} />
+              <View style={styles.continuePlayOverlay}>
+                <Ionicons name="play" size={20} color="#FFF" />
+              </View>
             </View>
 
-            {/* CTA */}
-            <TouchableOpacity
-              activeOpacity={0.9}
-              style={styles.heroCta}
-              onPress={() => console.log("Play today’s video")}
-            >
-              <Text style={styles.heroCtaText}>Start Practice</Text>
-            </TouchableOpacity>
+            <View style={styles.continueInfo}>
+              <Text style={styles.continueVideoTitle} numberOfLines={1}>
+                Hip Opening Flow
+              </Text>
+              <Text style={styles.continueInstructor} numberOfLines={1}>
+                with Willow Grace
+              </Text>
 
-            {/* Secondary */}
-            <TouchableOpacity activeOpacity={0.7}>
-              <Text style={styles.changePlan}>Change Plan</Text>
-            </TouchableOpacity>
+              <View style={styles.continueProgressTrack}>
+                <View style={[styles.continueProgressFill, { width: "62%" }]} />
+              </View>
+
+              <Text style={styles.continueTimeLeft}>11 min left</Text>
+            </View>
           </View>
         </View>
 
-        {/* CONTINUE WATCHING */}
+        {/* 4. QUICK START GRID */}
         <View style={styles.section}>
-          <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Continue Watching</Text>
-            <Ionicons name="chevron-forward" size={18} color="#9AA3A7" />
+          <Text style={styles.sectionTitle}>Quick Start</Text>
+          <View style={styles.quickGrid}>
+            <QuickGridCard
+              icon="leaf"
+              color="#60A57A"
+              title="Yoga"
+              sub="15 min Flow"
+            />
+            <QuickGridCard
+              icon="weather-windy"
+              color="#5699AA"
+              isMCI
+              title="Breathing"
+              sub="5 min Calm"
+            />
+            <QuickGridCard
+              icon="heart"
+              color="#D6946A"
+              title="Meditation"
+              sub="10 min Zen"
+            />
+            <QuickGridCard
+              icon="star-four-points"
+              color="#4F9B8B"
+              isMCI
+              title="Challenges"
+              sub="7-day Flex"
+            />
+          </View>
+        </View>
+
+        {/* 5. WEEKLY PROGRESS */}
+        <View style={styles.progressDetailCard}>
+          <View style={styles.progressHeader}>
+            <Ionicons name="calendar-outline" size={20} color="#5699AA" />
+            <Text style={styles.progressHeaderText}>This Week's Progress</Text>
+          </View>
+
+          <View style={styles.rowSpace}>
+            <Text style={styles.progressRowLabel}>Sessions completed</Text>
+            <Text style={styles.progressRowValue}>2 of 5</Text>
+          </View>
+
+          <View style={styles.barContainer}>
+            <View style={[styles.barFill, { width: "40%" }]} />
+          </View>
+        </View>
+
+        {/* 6. RECENT ACHIEVEMENTS (sparkles fixed) */}
+        <View style={styles.section}>
+          <View style={styles.achievementHeader}>
+            <MaterialCommunityIcons
+              name="star-four-points"
+              size={20}
+              color="#F2994A"
+            />
+            <Text style={styles.achievementTitle}>Recent Achievements</Text>
           </View>
 
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={styles.cwList}
+            contentContainerStyle={styles.badgeRow}
           >
-            <ContinueCard
-              image={CW_1}
-              title="Morning Stretch"
-              sub="6 min left"
-              progress={0.25}
+            <AchievementBadge
+              icon="trophy"
+              title="Week Warrior"
+              color="#E9A46A"
+              textColor="#3D2B1D"
             />
-            <ContinueCard
-              image={CW_2}
-              title="Evening Wind Down"
-              sub="13 min left"
-              progress={0.45}
+            <AchievementBadge
+              icon="star-four-points"
+              title="First Light"
+              color="#8DB07A"
+              textColor="#FFF"
+              subtitle="Earned!"
+            />
+            <AchievementBadge
+              icon="weather-sunset"
+              title="Early Riser"
+              color="#F8F9FA"
+              textColor="#4A5568"
+              isBordered
             />
           </ScrollView>
         </View>
 
-        {/* QUICK ACCESS */}
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Access</Text>
+        {/* 7. QUICK BREATHWORK BANNER (wind fixed) */}
+        <TouchableOpacity
+          activeOpacity={0.95}
+          style={styles.breathworkContainer}
+          accessibilityRole="button"
+          accessibilityLabel="Start Quick Breathwork"
+        >
+          <LinearGradient
+            colors={["#648D82", "#8DB07A"]}
+            start={{ x: 0, y: 0 }}
+            end={{ x: 1, y: 0 }}
+            style={styles.breathworkCard}
+          >
+            <View style={styles.breathworkInfo}>
+              <View style={styles.row}>
+                <MaterialCommunityIcons
+                  name="weather-windy"
+                  size={22}
+                  color="#FFF"
+                  style={{ marginRight: 8 }}
+                />
+                <Text style={styles.breathworkTitle}>Quick Breathwork</Text>
+              </View>
+              <Text style={styles.breathworkSub}>
+                3-minute breathing exercise
+              </Text>
+            </View>
 
-          <View style={styles.quickGrid}>
-            <QuickCard icon="yoga" title="Yoga" sub="Quick flows" />
-            <QuickCard icon="weather-windy" title="Breathing" sub="Calm & focus" />
-            <QuickCard icon="meditation" title="Meditation" sub="Relax mind" />
-            <QuickCard icon="briefcase-outline" title="Office Reset" sub="Neck & back" />
-          </View>
-        </View>
+            <View style={styles.startBtnInner}>
+              <MaterialCommunityIcons
+                name="play"
+                size={16}
+                color="#FFF"
+                style={{ marginRight: 6 }}
+              />
+              <Text style={styles.startBtnText}>Start</Text>
+            </View>
+          </LinearGradient>
+        </TouchableOpacity>
 
-        {/* PROGRESS SNAPSHOT */}
-        <View style={styles.progressCard}>
-          <View style={styles.progressItem}>
-            <Ionicons name="flame" size={26} color="#2E6B4F" />
-            <Text style={styles.progressValue}>4</Text>
-            <Text style={styles.progressLabel}>Day Streak</Text>
-          </View>
-
-          <View style={styles.progressItem}>
-            <Text style={styles.progressValue}>68</Text>
-            <Text style={styles.progressLabel}>Minutes this week</Text>
-          </View>
-        </View>
-
-        <Text style={styles.progressNote}>
-          You’ve shown up consistently 🌱
-        </Text>
-
-        <View style={{ height: 120 }} />
+        <View style={{ height: 24 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
-/* ---------- Components ---------- */
+/* --- Sub-Components --- */
 
-function ContinueCard({
-  image,
-  title,
-  sub,
-  progress,
-}: {
-  image: string;
-  title: string;
-  sub: string;
-  progress: number;
-}) {
-  return (
-    <TouchableOpacity activeOpacity={0.9} style={styles.cwCard}>
-      <View style={styles.cwMedia}>
-        <Image source={{ uri: image }} style={styles.cwImg} />
-        <View style={styles.cwPlay}>
-          <Ionicons name="play" size={18} color="#2E6B4F" />
-        </View>
-        <View style={styles.cwProgressTrack}>
-          <View style={[styles.cwProgressFill, { width: `${progress * 100}%` }]} />
-        </View>
-      </View>
-      <Text style={styles.cwTitle}>{title}</Text>
-      <Text style={styles.cwSub}>{sub}</Text>
-    </TouchableOpacity>
-  );
-}
-
-function QuickCard({
+function AchievementBadge({
   icon,
   title,
-  sub,
-}: {
-  icon: string;
-  title: string;
-  sub: string;
-}) {
+  subtitle,
+  color,
+  textColor,
+  isBordered,
+}: any) {
   return (
-    <TouchableOpacity activeOpacity={0.9} style={styles.quickCard}>
-      <View style={styles.quickIconWrap}>
-        <MaterialCommunityIcons name={icon as any} size={22} color="#2E6B4F" />
+    <View
+      style={[
+        styles.badgeCard,
+        {
+          backgroundColor: color,
+          borderWidth: isBordered ? 1 : 0,
+          borderColor: "#E2E8F0",
+        },
+      ]}
+    >
+      <MaterialCommunityIcons
+        name={icon}
+        size={28}
+        color={isBordered ? "#F2994A" : textColor}
+      />
+      <Text style={[styles.badgeTitle, { color: textColor }]}>{title}</Text>
+      {subtitle ? <Text style={styles.badgeStatus}>{subtitle}</Text> : null}
+    </View>
+  );
+}
+
+function QuickGridCard({ icon, color, title, sub, isMCI = false }: any) {
+  return (
+    <TouchableOpacity style={styles.qgCard} activeOpacity={0.85}>
+      <View style={[styles.qgIconCircle, { backgroundColor: color }]}>
+        {isMCI ? (
+          <MaterialCommunityIcons name={icon} size={20} color="#FFF" />
+        ) : (
+          <FontAwesome5 name={icon} size={16} color="#FFF" solid />
+        )}
       </View>
-      <Text style={styles.quickTitle}>{title}</Text>
-      <Text style={styles.quickSub}>{sub}</Text>
+      <Text style={styles.qgTitle}>{title}</Text>
+      <Text style={styles.qgSub}>{sub}</Text>
     </TouchableOpacity>
   );
 }
 
-/* ---------- Styles ---------- */
-
+/* --- Styles --- */
 const styles = StyleSheet.create({
-  safe: { flex: 1, backgroundColor: "#FFFFFF" },
-  container: { paddingHorizontal: 18, paddingTop: 10 },
+  safe: { flex: 1, backgroundColor: "#FBFBFB" },
 
-  header: { marginBottom: 14 },
-  greeting: { fontSize: 26, fontWeight: "800", color: "#111" },
-  subGreeting: { marginTop: 6, fontSize: 14, color: "#6B7478" },
-
-  heroCard: {
-    height: 230,
-    borderRadius: 22,
-    overflow: "hidden",
-    marginBottom: 22,
-  },
-  heroImg: { width: "100%", height: "100%" },
-  heroOverlay: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.45)",
-  },
-  heroContent: {
-    ...StyleSheet.absoluteFillObject,
-    padding: 16,
-    justifyContent: "space-between",
-  },
-  heroChipsRow: { flexDirection: "row", gap: 8 },
-  heroChip: {
-    backgroundColor: "rgba(0,0,0,0.6)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  heroChipText: { color: "#FFF", fontSize: 12, fontWeight: "700" },
-  heroChipLight: {
-    backgroundColor: "rgba(255,255,255,0.85)",
-    paddingHorizontal: 12,
-    paddingVertical: 6,
-    borderRadius: 999,
-  },
-  heroChipLightText: { color: "#333", fontSize: 12, fontWeight: "700" },
-
-  heroTitle: { color: "#FFF", fontSize: 22, fontWeight: "900" },
-  heroMeta: { color: "#FFF", fontSize: 15, marginTop: 6 },
-  heroMetaSub: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 13,
-    marginTop: 4,
-  },
-  heroCta: {
-    backgroundColor: "#E2B46B",
-    borderRadius: 16,
-    paddingVertical: 14,
-    alignItems: "center",
-  },
-  heroCtaText: { color: "#FFF", fontSize: 16, fontWeight: "800" },
-  changePlan: {
-    marginTop: 6,
-    textAlign: "center",
-    color: "#F3E1C2",
-    fontWeight: "700",
-    fontSize: 13,
+  statusBarSpacer: {
+    height: Platform.OS === "android" ? StatusBar.currentHeight ?? 0 : 0,
   },
 
-  section: { marginBottom: 22 },
-  sectionHeader: {
+  container: { paddingHorizontal: 20, paddingTop: 15, paddingBottom: 18 },
+
+  row: { flexDirection: "row", alignItems: "center" },
+
+  header: {
     flexDirection: "row",
     justifyContent: "space-between",
     alignItems: "center",
-    marginBottom: 12,
+    marginBottom: 18,
   },
-  sectionTitle: { fontSize: 18, fontWeight: "800", color: "#111" },
 
-  cwList: { paddingRight: 10 },
-  cwCard: { width: 170, marginRight: 14 },
-  cwMedia: {
-    height: 110,
-    borderRadius: 18,
-    overflow: "hidden",
-  },
-  cwImg: { width: "100%", height: "100%" },
-  cwPlay: {
-    position: "absolute",
-    left: "50%",
-    top: "50%",
-    transform: [{ translateX: -19 }, { translateY: -19 }],
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    backgroundColor: "rgba(255,255,255,0.9)",
+  greeting: { fontSize: 26, fontWeight: "800", color: "#2D3748" },
+  subGreeting: { fontSize: 14, color: "#718096", marginTop: 2 },
+
+  notificationCircle: {
+    width: 42,
+    height: 42,
+    borderRadius: 21,
+    backgroundColor: "#FFF",
     alignItems: "center",
     justifyContent: "center",
+    ...shadow(2),
   },
-  cwProgressTrack: {
+
+  /* HERO */
+  heroCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    padding: 15,
+    marginBottom: 18,
+    ...shadow(3),
+  },
+
+  cardHeader: { flexDirection: "row", alignItems: "center", marginBottom: 12 },
+  iconCircle: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: "#F0F7F4",
+    alignItems: "center",
+    justifyContent: "center",
+    marginRight: 10,
+  },
+
+  cardTag: { fontSize: 16, fontWeight: "800", color: "#1A1A1A" },
+  cardRecText: { fontSize: 12, color: "#718096", marginTop: 2 },
+
+  heroImageContainer: { height: 180, borderRadius: 18, overflow: "hidden" },
+  heroImg: { width: "100%", height: "100%" },
+
+  imageOverlayTags: {
     position: "absolute",
-    bottom: 0,
+    top: 12,
+    left: 12,
+    flexDirection: "row",
+  },
+
+  glassTag: {
+    backgroundColor: "rgba(0,0,0,0.45)",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    marginRight: 8,
+  },
+
+  accentTag: {
+    backgroundColor: "#E9A46A",
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+  },
+
+  tagText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
+
+  heroImageTextOverlay: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 12,
+  },
+  heroOverlayTitle: {
+    color: "#FFF",
+    fontSize: 20,
+    fontWeight: "900",
+  },
+  heroOverlaySub: {
+    color: "rgba(255,255,255,0.85)",
+    fontSize: 12,
+    marginTop: 4,
+    fontWeight: "700",
+  },
+
+  heroDescription: {
+    marginTop: 14,
+    fontSize: 16,
+    lineHeight: 22,
+    color: "#718096",
+    paddingHorizontal: 4,
+  },
+
+  primaryBtn: {
+    backgroundColor: "#E9A46A",
+    borderRadius: 18,
+    paddingVertical: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    marginTop: 14,
+  },
+  primaryBtnText: { color: "#FFF", fontSize: 16, fontWeight: "900" },
+
+  /* CONTINUE WATCHING */
+  continueCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    padding: 18,
+    marginBottom: 22,
+    ...shadow(2),
+  },
+  continueHeader: { marginBottom: 12 },
+  continueTitle: {
+    marginLeft: 10,
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#2D3748",
+  },
+  continueBody: { flexDirection: "row", alignItems: "center" },
+  continueThumbWrap: {
+    width: 86,
+    height: 62,
+    borderRadius: 16,
+    overflow: "hidden",
+    marginRight: 14,
+  },
+  continueThumb: { width: "100%", height: "100%" },
+  continuePlayOverlay: {
+    position: "absolute",
     left: 0,
     right: 0,
-    height: 4,
-    backgroundColor: "rgba(255,255,255,0.5)",
+    top: 0,
+    bottom: 0,
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "rgba(0,0,0,0.25)",
   },
-  cwProgressFill: {
+  continueInfo: { flex: 1 },
+  continueVideoTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#2D3748",
+  },
+  continueInstructor: {
+    fontSize: 13,
+    color: "#718096",
+    marginTop: 2,
+    fontWeight: "700",
+  },
+  continueProgressTrack: {
+    height: 6,
+    backgroundColor: "#EDF2F7",
+    borderRadius: 99,
+    overflow: "hidden",
+    marginTop: 10,
+  },
+  continueProgressFill: {
     height: "100%",
-    backgroundColor: "#2E6B4F",
+    backgroundColor: "#E9A46A",
   },
-  cwTitle: { marginTop: 10, fontWeight: "800" },
-  cwSub: { fontSize: 12, color: "#8A9498" },
+  continueTimeLeft: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#718096",
+    fontWeight: "700",
+  },
 
-  quickGrid: { flexDirection: "row", flexWrap: "wrap", gap: 12 as any },
-  quickCard: {
-    width: "48%",
-    backgroundColor: "#EAF6F0",
-    borderRadius: 18,
-    padding: 14,
+  /* SECTIONS */
+  section: { marginBottom: 22 },
+  sectionTitle: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#2D3748",
+    marginBottom: 15,
   },
-  quickIconWrap: {
+
+  quickGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "space-between",
+  },
+
+  qgCard: {
+    backgroundColor: "#FFF",
+    width: (width - 55) / 2,
+    padding: 15,
+    borderRadius: 20,
+    alignItems: "center",
+    marginBottom: 12,
+    ...shadow(2),
+  },
+
+  qgIconCircle: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: "#E6F2EA",
     alignItems: "center",
     justifyContent: "center",
+    marginBottom: 8,
+  },
+
+  qgTitle: { fontSize: 15, fontWeight: "800", color: "#1A1A1A" },
+  qgSub: {
+    fontSize: 11,
+    color: "#A0AEC0",
+    marginTop: 2,
+    textAlign: "center",
+    fontWeight: "600",
+  },
+
+  /* PROGRESS */
+  progressDetailCard: {
+    backgroundColor: "#FFF",
+    borderRadius: 24,
+    padding: 20,
+    marginBottom: 22,
+    ...shadow(2),
+  },
+
+  progressHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 16,
+  },
+  progressHeaderText: {
+    fontSize: 17,
+    fontWeight: "900",
+    marginLeft: 8,
+    color: "#1A1A1A",
+  },
+
+  rowSpace: {
+    flexDirection: "row",
+    justifyContent: "space-between",
     marginBottom: 10,
   },
-  quickTitle: { fontSize: 16, fontWeight: "800" },
-  quickSub: { fontSize: 13, color: "#6F7B80" },
+  progressRowLabel: { fontSize: 14, color: "#718096", fontWeight: "600" },
+  progressRowValue: { fontSize: 14, fontWeight: "900", color: "#1A1A1A" },
 
-  progressCard: {
-    backgroundColor: "#EAF6F0",
-    borderRadius: 22,
-    padding: 18,
-    flexDirection: "row",
-    justifyContent: "space-around",
+  barContainer: {
+    height: 8,
+    backgroundColor: "#EDF2F7",
+    borderRadius: 4,
+    overflow: "hidden",
   },
-  progressItem: { alignItems: "center" },
-  progressValue: {
-    fontSize: 28,
+  barFill: { height: "100%", backgroundColor: "#5699AA" },
+
+  /* ACHIEVEMENTS */
+  achievementHeader: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+  achievementTitle: {
+    fontSize: 18,
     fontWeight: "900",
-    color: "#2E6B4F",
-    marginTop: 6,
+    marginLeft: 8,
+    color: "#2D3748",
   },
-  progressLabel: {
-    fontSize: 13,
-    fontWeight: "600",
-    color: "#5C666A",
+  badgeRow: { paddingRight: 20 },
+  badgeCard: {
+    width: 110,
+    height: 130,
+    borderRadius: 20,
+    padding: 15,
+    marginRight: 12,
+    alignItems: "center",
+    justifyContent: "center",
   },
-  progressNote: {
-    marginTop: 10,
-    textAlign: "center",
-    color: "#6F7B80",
-    fontSize: 13,
+  badgeTitle: { fontSize: 13, fontWeight: "800", marginTop: 8, textAlign: "center" },
+  badgeStatus: { fontSize: 10, fontWeight: "800", color: "#FFF", marginTop: 2 },
+
+  /* BREATHWORK */
+  breathworkContainer: { marginBottom: 20 },
+  breathworkCard: {
+    borderRadius: 24,
+    padding: 20,
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    ...shadow(3),
   },
+  breathworkInfo: { flex: 1 },
+  breathworkTitle: { color: "#FFF", fontSize: 18, fontWeight: "900" },
+  breathworkSub: { color: "rgba(255,255,255,0.85)", fontSize: 13, marginTop: 4, fontWeight: "600" },
+
+  startBtnInner: {
+    backgroundColor: "rgba(255,255,255,0.3)",
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  startBtnText: { color: "#FFF", fontWeight: "900", fontSize: 15 },
 });
