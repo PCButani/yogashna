@@ -13,83 +13,215 @@ import {
   TextInput,
   FlatList,
 } from "react-native";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
 
 const { width } = Dimensions.get("window");
 
-// ---------- Mock Data (replace with API later) ----------
+/* =========================
+   TYPES
+========================= */
+
+type LibrarySectionKey =
+  | "Health Support"
+  | "Lifestyle & Habits"
+  | "Fitness & Flexibility"
+  | "Mindfulness"
+  | "Office Yoga";
+
+type WellnessCategory =
+  | "Health Support"
+  | "Lifestyle & Habits"
+  | "Fitness & Flexibility"
+  | "Beginners & Mindfulness"
+  | "Office Yoga";
+
 type LibraryItem = {
   id: string;
+  section: LibrarySectionKey;
   title: string;
   instructor: string;
   description: string;
-  durationLabel: string; // "20 min" or "7 days"
-  rating: number; // 4.8
-  levelTag?: string; // "Gentle", "All Levels"
-  focusTag?: string; // "Better Sleep", "Flexibility"
+  durationLabel: string;
+  rating: number;
+  levelTag?: string;
+  focusTag?: string;
   thumbnail: string;
   isFavorite?: boolean;
 };
 
-const NEW_THIS_WEEK: LibraryItem[] = [
+/* =========================
+   MOCK DATA
+========================= */
+
+const ALL_LIBRARY_ITEMS: LibraryItem[] = [
   {
-    id: "nw1",
-    title: "Moon Salutation for Rest",
-    instructor: "Luna Nocturne",
-    description: "Prepare your body and mind for deep, relaxing sleep...",
-    durationLabel: "20 min",
+    id: "hs1",
+    section: "Health Support",
+    title: "Back Pain Relief Flow",
+    instructor: "Ari Sol",
+    description: "Gentle spine mobility to ease lower back tension and stiffness.",
+    durationLabel: "14 min",
     rating: 4.8,
     levelTag: "Gentle",
-    focusTag: "Better Sleep",
+    focusTag: "Back Care",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
-    isFavorite: false,
   },
   {
-    id: "nw2",
-    title: "7-Day Flexibility Challenge",
-    instructor: "Multiple Teachers",
-    description: "Transform your flexibility in one week with daily sessions...",
-    durationLabel: "7 days",
+    id: "hs2",
+    section: "Health Support",
+    title: "Diabetes Support Stretch",
+    instructor: "Willow Grace",
+    description: "Support metabolism and circulation with a slow, steady sequence.",
+    durationLabel: "18 min",
+    rating: 4.7,
+    levelTag: "All Levels",
+    focusTag: "Metabolic",
+    thumbnail:
+      "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    id: "hs3",
+    section: "Health Support",
+    title: "Neck & Shoulder Release",
+    instructor: "Luna Nocturne",
+    description: "Unwind desk tightness and tension headaches with easy movements.",
+    durationLabel: "10 min",
+    rating: 4.9,
+    levelTag: "Beginner",
+    focusTag: "Relief",
+    thumbnail:
+      "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
+  },
+
+  {
+    id: "lh1",
+    section: "Lifestyle & Habits",
+    title: "Morning Energy Reset",
+    instructor: "Ari Sol",
+    description: "Wake up your body with a short routine you can repeat daily.",
+    durationLabel: "12 min",
     rating: 4.8,
     levelTag: "All Levels",
-    focusTag: "Flexibility",
+    focusTag: "Morning",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
-    isFavorite: true,
   },
-];
-
-const MORE_FOR_YOU: LibraryItem[] = [
   {
-    id: "m1",
+    id: "lh2",
+    section: "Lifestyle & Habits",
+    title: "Better Sleep Wind-Down",
+    instructor: "Luna Nocturne",
+    description: "A calming evening flow + breath to prepare for deep sleep.",
+    durationLabel: "16 min",
+    rating: 4.9,
+    levelTag: "Gentle",
+    focusTag: "Sleep",
+    thumbnail:
+      "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+  },
+
+  {
+    id: "ff1",
+    section: "Fitness & Flexibility",
     title: "Hip Opening Flow",
     instructor: "Willow Grace",
-    description: "Unwind tight hips and lower back tension with a gentle flow...",
+    description: "Open hips, improve mobility, and reduce lower-back tightness.",
     durationLabel: "18 min",
     rating: 4.7,
     levelTag: "Gentle",
     focusTag: "Mobility",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
-    isFavorite: false,
   },
   {
-    id: "m2",
+    id: "ff2",
+    section: "Fitness & Flexibility",
+    title: "7-Day Flexibility Challenge",
+    instructor: "Multiple Teachers",
+    description: "One week. Daily sessions. Noticeable flexibility improvement.",
+    durationLabel: "7 days",
+    rating: 4.8,
+    levelTag: "All Levels",
+    focusTag: "Challenge",
+    thumbnail:
+      "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+  },
+
+  {
+    id: "mf1",
+    section: "Mindfulness",
     title: "Breath Reset",
     instructor: "Ari Sol",
-    description: "A calming breath practice for stress relief and better focus...",
+    description: "A calming breath practice for stress relief and better focus.",
     durationLabel: "6 min",
     rating: 4.9,
     levelTag: "Beginner",
     focusTag: "Calm",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
-    isFavorite: false,
+  },
+  {
+    id: "mf2",
+    section: "Mindfulness",
+    title: "5-Min Meditation Break",
+    instructor: "Luna Nocturne",
+    description: "A short guided reset for clarity, patience, and calm attention.",
+    durationLabel: "5 min",
+    rating: 4.8,
+    levelTag: "Beginner",
+    focusTag: "Mind",
+    thumbnail:
+      "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
+  },
+
+  {
+    id: "of1",
+    section: "Office Yoga",
+    title: "Desk Posture Fix",
+    instructor: "Willow Grace",
+    description: "Quick posture routine for neck, shoulders, and upper back.",
+    durationLabel: "7 min",
+    rating: 4.7,
+    levelTag: "Beginner",
+    focusTag: "Desk",
+    thumbnail:
+      "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+  },
+  {
+    id: "of2",
+    section: "Office Yoga",
+    title: "2-Min Chair Stretch",
+    instructor: "Ari Sol",
+    description: "Micro-break stretch you can do between meetings—no mat needed.",
+    durationLabel: "2 min",
+    rating: 4.8,
+    levelTag: "Beginner",
+    focusTag: "Quick",
+    thumbnail:
+      "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
   },
 ];
 
-// ---------- Shadow helper (same as dashboard) ----------
+const SECTION_ORDER: LibrarySectionKey[] = [
+  "Health Support",
+  "Lifestyle & Habits",
+  "Fitness & Flexibility",
+  "Mindfulness",
+  "Office Yoga",
+];
+
+// IMPORTANT: map Library section → WellnessGoalsScreen category
+const MAP_TO_WELLNESS_CATEGORY: Record<LibrarySectionKey, WellnessCategory> = {
+  "Health Support": "Health Support",
+  "Lifestyle & Habits": "Lifestyle & Habits",
+  "Fitness & Flexibility": "Fitness & Flexibility",
+  Mindfulness: "Beginners & Mindfulness",
+  "Office Yoga": "Office Yoga",
+};
+
+// ---------- Shadow helper ----------
 const shadow = (elevation = 3) =>
   Platform.select({
     android: { elevation },
@@ -102,67 +234,63 @@ const shadow = (elevation = 3) =>
     default: {},
   });
 
-// ---------- Screen ----------
-export default function LibraryScreen() {
-  const [query, setQuery] = useState("");
-  const [activeFilter, setActiveFilter] = useState<
-    "All" | "Yoga" | "Breathing" | "Meditation" | "Challenges"
-  >("All");
+/* =========================
+   SCREEN
+========================= */
 
+export default function LibraryScreen() {
+  const navigation = useNavigation<any>();
+
+  const [query, setQuery] = useState("");
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
     const seed: Record<string, boolean> = {};
-    [...NEW_THIS_WEEK, ...MORE_FOR_YOU].forEach((x) => {
-      seed[x.id] = !!x.isFavorite;
-    });
+    ALL_LIBRARY_ITEMS.forEach((x) => (seed[x.id] = !!x.isFavorite));
     return seed;
   });
 
-  const filteredNew = useMemo(() => {
-    const q = query.trim().toLowerCase();
-
-    // This filter is intentionally simple for now.
-    // Later: match activeFilter to item categories from API.
-    return NEW_THIS_WEEK.filter((x) => {
-      const hay = `${x.title} ${x.instructor} ${x.description} ${x.levelTag ?? ""} ${
-        x.focusTag ?? ""
-      }`.toLowerCase();
-      const qOk = q.length === 0 || hay.includes(q);
-      const filterOk = activeFilter === "All" ? true : true;
-      return qOk && filterOk;
-    });
-  }, [query, activeFilter]);
-
-  const filteredMore = useMemo(() => {
-    const q = query.trim().toLowerCase();
-    return MORE_FOR_YOU.filter((x) => {
-      const hay = `${x.title} ${x.instructor} ${x.description} ${x.levelTag ?? ""} ${
-        x.focusTag ?? ""
-      }`.toLowerCase();
-      const qOk = q.length === 0 || hay.includes(q);
-      const filterOk = activeFilter === "All" ? true : true;
-      return qOk && filterOk;
-    });
-  }, [query, activeFilter]);
-
   const toggleFav = (id: string) => {
     setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
+  };
+
+  const filteredByQuery = useMemo(() => {
+    const q = query.trim().toLowerCase();
+    if (!q) return ALL_LIBRARY_ITEMS;
+
+    return ALL_LIBRARY_ITEMS.filter((x) => {
+      const hay = `${x.title} ${x.instructor} ${x.description} ${x.levelTag ?? ""} ${
+        x.focusTag ?? ""
+      } ${x.section}`.toLowerCase();
+      return hay.includes(q);
+    });
+  }, [query]);
+
+  const itemsBySection = useMemo(() => {
+    const map: Record<LibrarySectionKey, LibraryItem[]> = {
+      "Health Support": [],
+      "Lifestyle & Habits": [],
+      "Fitness & Flexibility": [],
+      Mindfulness: [],
+      "Office Yoga": [],
+    };
+    filteredByQuery.forEach((it) => map[it.section].push(it));
+    return map;
+  }, [filteredByQuery]);
+
+  const onPressMore = (section: LibrarySectionKey) => {
+    const wellnessCategory = MAP_TO_WELLNESS_CATEGORY[section];
+    navigation.navigate("WellnessGoalsScreen", { wellnessCategory });
   };
 
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.statusBarSpacer} />
 
-      <ScrollView
-        showsVerticalScrollIndicator={false}
-        contentContainerStyle={styles.container}
-      >
+      <ScrollView showsVerticalScrollIndicator={false} contentContainerStyle={styles.container}>
         {/* HEADER */}
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Library</Text>
-            <Text style={styles.subtitle}>
-              Find your next practice — without scrolling forever
-            </Text>
+            <Text style={styles.subtitle}>Pick a section. Find the right session fast.</Text>
           </View>
 
           <TouchableOpacity style={styles.iconBtn} activeOpacity={0.85}>
@@ -176,7 +304,7 @@ export default function LibraryScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search yoga, breathing, sleep..."
+            placeholder="Search sleep, back pain, office, breathing..."
             placeholderTextColor="#A0AEC0"
             style={styles.searchInput}
             returnKeyType="search"
@@ -192,78 +320,56 @@ export default function LibraryScreen() {
           )}
         </View>
 
-        {/* FILTER PILLS */}
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.filterRow}
-        >
-          <FilterPill
-            label="All"
-            active={activeFilter === "All"}
-            onPress={() => setActiveFilter("All")}
-          />
-          <FilterPill
-            label="Yoga"
-            active={activeFilter === "Yoga"}
-            onPress={() => setActiveFilter("Yoga")}
-          />
-          <FilterPill
-            label="Breathing"
-            active={activeFilter === "Breathing"}
-            onPress={() => setActiveFilter("Breathing")}
-          />
-          <FilterPill
-            label="Meditation"
-            active={activeFilter === "Meditation"}
-            onPress={() => setActiveFilter("Meditation")}
-          />
-          <FilterPill
-            label="Challenges"
-            active={activeFilter === "Challenges"}
-            onPress={() => setActiveFilter("Challenges")}
-          />
-        </ScrollView>
+        {/* SECTIONS (VERTICAL ONLY) */}
+        {SECTION_ORDER.map((sectionKey) => {
+          const data = itemsBySection[sectionKey] ?? [];
+          const preview = data.slice(0, 2); // ✅ Only 2 cards per section
 
-        {/* NEW THIS WEEK */}
-        <View style={styles.sectionHeader}>
-          <Text style={styles.sectionTitle}>New This Week</Text>
-        </View>
+          // When searching, hide empty sections
+          if (query.trim().length > 0 && preview.length === 0) return null;
 
-        <FlatList
-          data={filteredNew}
-          keyExtractor={(item) => item.id}
-          numColumns={2}
-          columnWrapperStyle={styles.gridRow}
-          scrollEnabled={false}
-          renderItem={({ item }) => (
-            <VideoInfoCard
-              item={item}
-              isFavorite={!!favorites[item.id]}
-              onToggleFavorite={() => toggleFav(item.id)}
-              onPress={() => {
-                // TODO: navigate to details/player
-              }}
-            />
-          )}
-        />
+          return (
+            <View key={sectionKey} style={{ marginTop: 18 }}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>{sectionKey}</Text>
 
-        {/* MORE FOR YOU (Optional section, compact + less images) */}
-        <View style={[styles.sectionHeader, { marginTop: 10 }]}>
-          <Text style={styles.sectionTitle}>Recommended For You</Text>
-        </View>
+                <TouchableOpacity
+                  onPress={() => onPressMore(sectionKey)}
+                  activeOpacity={0.85}
+                  style={styles.moreBtn}
+                >
+                  <Text style={styles.moreText}>More</Text>
+                  <Ionicons name="chevron-forward" size={16} color="#E9A46A" />
+                </TouchableOpacity>
+              </View>
 
-        {filteredMore.map((item) => (
-          <CompactVideoRow
-            key={item.id}
-            item={item}
-            isFavorite={!!favorites[item.id]}
-            onToggleFavorite={() => toggleFav(item.id)}
-            onPress={() => {
-              // TODO: navigate to details/player
-            }}
-          />
-        ))}
+              {preview.length === 0 ? (
+                <View style={styles.emptyState}>
+                  <Ionicons name="search" size={18} color="#A0AEC0" />
+                  <Text style={styles.emptyText}>No matches in this section.</Text>
+                </View>
+              ) : (
+                <FlatList
+                  data={preview}
+                  keyExtractor={(item) => item.id}
+                  numColumns={2}
+                  columnWrapperStyle={styles.gridRow}
+                  scrollEnabled={false}
+                  renderItem={({ item }) => (
+                    <VideoInfoCard
+                      item={item}
+                      isFavorite={!!favorites[item.id]}
+                      onToggleFavorite={() => toggleFav(item.id)}
+                      onPress={() => {
+                        // TODO: navigate to player/details
+                      }}
+                    />
+                  )}
+                />
+              )}
+            </View>
+          );
+        })}
 
         <View style={{ height: 28 }} />
       </ScrollView>
@@ -271,28 +377,9 @@ export default function LibraryScreen() {
   );
 }
 
-// ---------- Components ----------
-function FilterPill({
-  label,
-  active,
-  onPress,
-}: {
-  label: string;
-  active: boolean;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity
-      onPress={onPress}
-      activeOpacity={0.85}
-      style={[styles.pill, active ? styles.pillActive : styles.pillIdle]}
-    >
-      <Text style={[styles.pillText, active ? styles.pillTextActive : styles.pillTextIdle]}>
-        {label}
-      </Text>
-    </TouchableOpacity>
-  );
-}
+/* =========================
+   COMPONENTS
+========================= */
 
 function VideoInfoCard({
   item,
@@ -307,11 +394,9 @@ function VideoInfoCard({
 }) {
   return (
     <TouchableOpacity activeOpacity={0.9} style={styles.card} onPress={onPress}>
-      {/* Thumbnail */}
       <View style={styles.thumbWrap}>
         <Image source={{ uri: item.thumbnail }} style={styles.thumb} />
 
-        {/* Heart */}
         <TouchableOpacity
           onPress={onToggleFavorite}
           activeOpacity={0.85}
@@ -325,12 +410,10 @@ function VideoInfoCard({
           />
         </TouchableOpacity>
 
-        {/* Play */}
         <View style={styles.playOverlay}>
           <Ionicons name="play" size={20} color="#FFF" />
         </View>
 
-        {/* Bottom stats row */}
         <View style={styles.cardBottomOverlay}>
           <View style={styles.statPill}>
             <Ionicons name="time-outline" size={14} color="#FFF" />
@@ -344,7 +427,6 @@ function VideoInfoCard({
         </View>
       </View>
 
-      {/* Text content */}
       <View style={styles.cardContent}>
         <Text style={styles.cardTitle} numberOfLines={2}>
           {item.title}
@@ -375,65 +457,12 @@ function VideoInfoCard({
   );
 }
 
-function CompactVideoRow({
-  item,
-  isFavorite,
-  onToggleFavorite,
-  onPress,
-}: {
-  item: LibraryItem;
-  isFavorite: boolean;
-  onToggleFavorite: () => void;
-  onPress: () => void;
-}) {
-  return (
-    <TouchableOpacity style={styles.rowCard} activeOpacity={0.9} onPress={onPress}>
-      <View style={styles.rowThumbWrap}>
-        <Image source={{ uri: item.thumbnail }} style={styles.rowThumb} />
-        <View style={styles.rowPlayOverlay}>
-          <Ionicons name="play" size={16} color="#FFF" />
-        </View>
-      </View>
+/* =========================
+   STYLES
+========================= */
 
-      <View style={styles.rowInfo}>
-        <Text style={styles.rowTitle} numberOfLines={1}>
-          {item.title}
-        </Text>
-        <Text style={styles.rowSub} numberOfLines={1}>
-          with {item.instructor}
-        </Text>
-
-        <View style={styles.rowMeta}>
-          <View style={styles.rowMetaItem}>
-            <Ionicons name="time-outline" size={14} color="#718096" />
-            <Text style={styles.rowMetaText}>{item.durationLabel}</Text>
-          </View>
-          <View style={[styles.rowMetaItem, { marginLeft: 12 }]}>
-            <Ionicons name="star" size={14} color="#F6AD55" />
-            <Text style={styles.rowMetaText}>{item.rating.toFixed(1)}</Text>
-          </View>
-        </View>
-      </View>
-
-      <TouchableOpacity
-        onPress={onToggleFavorite}
-        activeOpacity={0.85}
-        style={styles.rowFavBtn}
-        hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-      >
-        <Ionicons
-          name={isFavorite ? "heart" : "heart-outline"}
-          size={18}
-          color={isFavorite ? "#E53E3E" : "#A0AEC0"}
-        />
-      </TouchableOpacity>
-    </TouchableOpacity>
-  );
-}
-
-// ---------- Styles (Aligned with TodayDashboard) ----------
 const CARD_GAP = 14;
-const CARD_W = (width - 40 - CARD_GAP) / 2; // paddingHorizontal=20 each side
+const CARD_W = (width - 40 - CARD_GAP) / 2;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FBFBFB" },
@@ -480,25 +509,7 @@ const styles = StyleSheet.create({
   },
   clearBtn: { paddingLeft: 6 },
 
-  filterRow: {
-    paddingVertical: 14,
-    paddingRight: 20,
-  },
-  pill: {
-    paddingHorizontal: 14,
-    paddingVertical: 10,
-    borderRadius: 999,
-    marginRight: 10,
-    borderWidth: 1,
-  },
-  pillIdle: { backgroundColor: "#FFF", borderColor: "#E2E8F0" },
-  pillActive: { backgroundColor: "#E9A46A", borderColor: "#E9A46A" },
-  pillText: { fontSize: 13, fontWeight: "800" },
-  pillTextIdle: { color: "#2D3748" },
-  pillTextActive: { color: "#FFF" },
-
   sectionHeader: {
-    marginTop: 4,
     marginBottom: 12,
     flexDirection: "row",
     alignItems: "center",
@@ -506,12 +517,33 @@ const styles = StyleSheet.create({
   },
   sectionTitle: { fontSize: 20, fontWeight: "900", color: "#2D3748" },
 
-  gridRow: {
-    justifyContent: "space-between",
-    marginBottom: 14,
+  moreBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#FFF",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+    ...shadow(1),
   },
+  moreText: { fontSize: 13, fontWeight: "900", color: "#E9A46A", marginRight: 2 },
 
-  // Big grid card
+  emptyState: {
+    backgroundColor: "#FFF",
+    borderRadius: 18,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    flexDirection: "row",
+    alignItems: "center",
+    borderWidth: 1,
+    borderColor: "#E2E8F0",
+  },
+  emptyText: { marginLeft: 10, color: "#718096", fontWeight: "700" },
+
+  gridRow: { justifyContent: "space-between", marginBottom: 14 },
+
   card: {
     width: CARD_W,
     backgroundColor: "#FFF",
@@ -519,11 +551,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     ...shadow(2),
   },
-
-  thumbWrap: {
-    height: 165,
-    backgroundColor: "#EDF2F7",
-  },
+  thumbWrap: { height: 165, backgroundColor: "#EDF2F7" },
   thumb: { width: "100%", height: "100%" },
 
   heartBtn: {
@@ -547,6 +575,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
     justifyContent: "center",
   },
+
   cardBottomOverlay: {
     position: "absolute",
     left: 12,
@@ -563,28 +592,15 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
   },
-  statText: {
-    marginLeft: 6,
-    color: "#FFF",
-    fontSize: 12,
-    fontWeight: "900",
-  },
+  statText: { marginLeft: 6, color: "#FFF", fontSize: 12, fontWeight: "900" },
 
-  cardContent: {
-    padding: 14,
-    paddingTop: 12,
-  },
+  cardContent: { padding: 14, paddingTop: 12 },
   cardTitle: { fontSize: 16, fontWeight: "900", color: "#2D3748" },
   cardInstructor: { marginTop: 6, fontSize: 13, color: "#718096", fontWeight: "700" },
   cardDesc: { marginTop: 10, fontSize: 13, color: "#718096", lineHeight: 18, fontWeight: "600" },
 
   tagRow: { flexDirection: "row", marginTop: 12, flexWrap: "wrap", gap: 8 },
-  chip: {
-    paddingHorizontal: 12,
-    paddingVertical: 7,
-    borderRadius: 999,
-    borderWidth: 1,
-  },
+  chip: { paddingHorizontal: 12, paddingVertical: 7, borderRadius: 999, borderWidth: 1 },
   chipText: { fontSize: 12, fontWeight: "900" },
 
   chipGreen: { backgroundColor: "#EEF7F0", borderColor: "#CFE8D5" },
@@ -592,50 +608,4 @@ const styles = StyleSheet.create({
 
   chipBlue: { backgroundColor: "#EAF4FB", borderColor: "#CFE3F2" },
   chipBlueText: { color: "#5B8FAF" },
-
-  // Compact rows (less image-heavy)
-  rowCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 22,
-    padding: 14,
-    marginBottom: 12,
-    flexDirection: "row",
-    alignItems: "center",
-    ...shadow(2),
-  },
-  rowThumbWrap: {
-    width: 74,
-    height: 54,
-    borderRadius: 16,
-    overflow: "hidden",
-    marginRight: 12,
-    backgroundColor: "#EDF2F7",
-  },
-  rowThumb: { width: "100%", height: "100%" },
-  rowPlayOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.18)",
-  },
-  rowInfo: { flex: 1 },
-  rowTitle: { fontSize: 16, fontWeight: "900", color: "#2D3748" },
-  rowSub: { marginTop: 4, fontSize: 13, color: "#718096", fontWeight: "700" },
-  rowMeta: { flexDirection: "row", alignItems: "center", marginTop: 10 },
-  rowMetaItem: { flexDirection: "row", alignItems: "center" },
-  rowMetaText: { marginLeft: 6, fontSize: 12, color: "#718096", fontWeight: "700" },
-
-  rowFavBtn: {
-    width: 38,
-    height: 38,
-    borderRadius: 19,
-    alignItems: "center",
-    justifyContent: "center",
-    marginLeft: 10,
-    backgroundColor: "#F8F9FA",
-  },
 });
