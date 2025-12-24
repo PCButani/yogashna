@@ -7,14 +7,8 @@ import LibraryScreen from "../screens/Library/LibraryScreen";
 import LiveScreen from "../screens/Live/LiveScreen";
 import ProgressScreen from "../screens/Progress/ProgressScreen";
 import ProfileScreen from "../screens/Profile/ProfileScreen";
-
-type MainTabParamList = {
-  Today: undefined;
-  Library: undefined;
-  Live: undefined;
-  Progress: undefined;
-  Profile: undefined;
-};
+import { MainTabParamList } from "../types/navigation";
+import { Routes } from "../constants/routes";
 
 type TabIconName = "home-outline" | "grid-outline" | "play-circle-outline" | "bar-chart-outline" | "person-outline";
 
@@ -38,11 +32,11 @@ export default function MainTabsNavigator() {
         tabBarIcon: ({ focused }) => {
           let iconName: TabIconName = "home-outline";
 
-          if (route.name === "Today") iconName = "home-outline";
-          if (route.name === "Library") iconName = "grid-outline";
-          if (route.name === "Live") iconName = "play-circle-outline";
-          if (route.name === "Progress") iconName = "bar-chart-outline";
-          if (route.name === "Profile") iconName = "person-outline";
+          if (route.name === Routes.TODAY) iconName = "home-outline";
+          if (route.name === Routes.LIBRARY) iconName = "grid-outline";
+          if (route.name === Routes.LIVE) iconName = "play-circle-outline";
+          if (route.name === Routes.PROGRESS) iconName = "bar-chart-outline";
+          if (route.name === Routes.PROFILE) iconName = "person-outline";
 
           return (
             <Ionicons
@@ -56,11 +50,11 @@ export default function MainTabsNavigator() {
         tabBarInactiveTintColor: "#9AA3A7",
       })}
     >
-      <Tab.Screen name="Today" component={TodayScreen} />
-      <Tab.Screen name="Library" component={LibraryScreen} />
-      <Tab.Screen name="Live" component={LiveScreen} />
-      <Tab.Screen name="Progress" component={ProgressScreen} />
-      <Tab.Screen name="Profile" component={ProfileScreen} />
+      <Tab.Screen name={Routes.TODAY} component={TodayScreen} />
+      <Tab.Screen name={Routes.LIBRARY} component={LibraryScreen} />
+      <Tab.Screen name={Routes.LIVE} component={LiveScreen} />
+      <Tab.Screen name={Routes.PROGRESS} component={ProgressScreen} />
+      <Tab.Screen name={Routes.PROFILE} component={ProfileScreen} />
     </Tab.Navigator>
   );
 }

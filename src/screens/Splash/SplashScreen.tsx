@@ -7,13 +7,21 @@ import {
   SafeAreaView,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../types/navigation";
+import { Routes } from "../../constants/routes";
+
+type SplashScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Splash"
+>;
 
 export default function SplashScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<SplashScreenNavigationProp>();
 
   useEffect(() => {
     const t = setTimeout(() => {
-      navigation.replace("Onboarding");
+      navigation.replace(Routes.ONBOARDING);
     }, 1400);
 
     return () => clearTimeout(t);

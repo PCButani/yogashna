@@ -5,7 +5,6 @@ import SplashScreen from "../screens/Splash/SplashScreen";
 import OnboardingScreen from "../screens/Onboarding/OnboardingScreen";
 import AuthEntryScreen from "../screens/Auth/AuthEntryScreen";
 import OtpVerifyScreen from "../screens/Auth/OtpVerifyScreen";
-import LoginScreen from "../screens/Auth/LoginScreen";
 import WellnessFocusScreen from "../screens/SignupOnboarding/WellnessFocusScreen";
 import GoalsScreen from "../screens/SignupOnboarding/GoalsScreen";
 import PersonalizePracticeScreen from "../screens/SignupOnboarding/PersonalizePracticeScreen";
@@ -14,34 +13,28 @@ import AboutYouScreen from "../screens/SignupOnboarding/AboutYouScreen";
 import TodayScreen from "../screens/Dashboard/TodayScreen";
 import MainTabsNavigator from "./MainTabsNavigator";
 import WellnessGoalsScreen from "../screens/Library/WellnessGoalsScreen";
+import { RootStackParamList } from "../types/navigation";
+import { Routes } from "../constants/routes";
 
-
-
-
-
-
-
-
-const Stack = createNativeStackNavigator();
+const Stack = createNativeStackNavigator<RootStackParamList>();
 
 export default function RootNavigator() {
   return (
     <SignupOnboardingProvider>
       <NavigationContainer>
         <Stack.Navigator screenOptions={{ headerShown: false }}>
-          <Stack.Screen name="Splash" component={SplashScreen} />
-          <Stack.Screen name="Onboarding" component={OnboardingScreen} />
-          <Stack.Screen name="AuthEntry" component={AuthEntryScreen} />
-          <Stack.Screen name="OtpVerify" component={OtpVerifyScreen} />
-          <Stack.Screen name="WellnessFocus" component={WellnessFocusScreen} />
-          <Stack.Screen name="Goals" component={GoalsScreen} />
-          <Stack.Screen name="AboutYou" component={AboutYouScreen} />
-          <Stack.Screen name="PersonalizePractice" component={PersonalizePracticeScreen} />
-          <Stack.Screen name="PlanSummary" component={PlanSummaryScreen} />
-          <Stack.Screen name="Login" component={LoginScreen} />
-          <Stack.Screen name="Today" component={TodayScreen} />
-          <Stack.Screen name="WellnessGoals" component={WellnessGoalsScreen} />
-          <Stack.Screen name="MainTabs" component={MainTabsNavigator} />
+          <Stack.Screen name={Routes.SPLASH} component={SplashScreen} />
+          <Stack.Screen name={Routes.ONBOARDING} component={OnboardingScreen} />
+          <Stack.Screen name={Routes.AUTH_ENTRY} component={AuthEntryScreen} />
+          <Stack.Screen name={Routes.OTP_VERIFY} component={OtpVerifyScreen} />
+          <Stack.Screen name={Routes.WELLNESS_FOCUS} component={WellnessFocusScreen} />
+          <Stack.Screen name={Routes.GOALS} component={GoalsScreen} />
+          <Stack.Screen name={Routes.ABOUT_YOU} component={AboutYouScreen} />
+          <Stack.Screen name={Routes.PERSONALIZE_PRACTICE} component={PersonalizePracticeScreen} />
+          <Stack.Screen name={Routes.PLAN_SUMMARY} component={PlanSummaryScreen} />
+          <Stack.Screen name={Routes.TODAY} component={TodayScreen} />
+          <Stack.Screen name={Routes.WELLNESS_GOALS} component={WellnessGoalsScreen} />
+          <Stack.Screen name={Routes.MAIN_TABS} component={MainTabsNavigator} />
         </Stack.Navigator>
       </NavigationContainer>
     </SignupOnboardingProvider>

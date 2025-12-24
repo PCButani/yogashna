@@ -8,10 +8,18 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { Ionicons } from "@expo/vector-icons";
+import { RootStackParamList } from "../../types/navigation";
+import { Routes } from "../../constants/routes";
+
+type OnboardingScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Onboarding"
+>;
 
 export default function OnboardingScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<OnboardingScreenNavigationProp>();
 
   return (
     <ImageBackground
@@ -43,7 +51,7 @@ export default function OnboardingScreen() {
             <TouchableOpacity
               activeOpacity={0.9}
               style={styles.primaryBtn}
-              onPress={() => navigation.navigate("AuthEntry", { mode: "signup" })}
+              onPress={() => navigation.navigate(Routes.AUTH_ENTRY, { mode: "signup" })}
             >
               <View style={styles.btnRow}>
                 <Ionicons name="sparkles-outline" size={20} color="#fff" />
@@ -54,7 +62,7 @@ export default function OnboardingScreen() {
             <TouchableOpacity
               activeOpacity={0.85}
               style={styles.secondaryBtn}
-              onPress={() => navigation.navigate("AuthEntry", { mode: "login" })}
+              onPress={() => navigation.navigate(Routes.AUTH_ENTRY, { mode: "login" })}
             >
               <View style={styles.btnRow}>
                 <Ionicons name="log-in-outline" size={20} color="#fff" />

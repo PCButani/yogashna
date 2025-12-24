@@ -15,6 +15,11 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { CompositeNavigationProp } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
+import { RootStackParamList, MainTabParamList, WellnessCategory } from "../../types/navigation";
+import { Routes } from "../../constants/routes";
 
 const { width } = Dimensions.get("window");
 
@@ -27,13 +32,6 @@ type LibrarySectionKey =
   | "Lifestyle & Habits"
   | "Fitness & Flexibility"
   | "Mindfulness"
-  | "Office Yoga";
-
-type WellnessCategory =
-  | "Health Support"
-  | "Lifestyle & Habits"
-  | "Fitness & Flexibility"
-  | "Beginners & Mindfulness"
   | "Office Yoga";
 
 type LibraryItem = {
@@ -238,8 +236,13 @@ const shadow = (elevation = 3) =>
    SCREEN
 ========================= */
 
+type LibraryScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, "Library">,
+  NativeStackNavigationProp<RootStackParamList>
+>;
+
 export default function LibraryScreen() {
-  const navigation = useNavigation<any>();
+  const navigation = useNavigation<LibraryScreenNavigationProp>();
 
   const [query, setQuery] = useState("");
   const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
@@ -278,7 +281,7 @@ export default function LibraryScreen() {
 
   const onPressMore = (section: LibrarySectionKey) => {
     const wellnessCategory = MAP_TO_WELLNESS_CATEGORY[section];
-    navigation.navigate("WellnessGoalsScreen", { wellnessCategory });
+    navigation.navigate(Routes.WELLNESS_GOALS, { wellnessCategory });
   };
 
   return (
