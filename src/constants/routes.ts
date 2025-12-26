@@ -21,6 +21,7 @@ export const Routes = {
   MAIN_TABS: "MainTabs",
   TODAY: "Today",
   WELLNESS_GOALS: "WellnessGoals",
+  COMMON_PLAYER: "CommonPlayer",
 
   // Tab Screens
   LIBRARY: "Library",

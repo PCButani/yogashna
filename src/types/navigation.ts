@@ -26,6 +26,7 @@ export type RootStackParamList = {
   PlanSummary: undefined;
   Today: undefined;
   WellnessGoals: { wellnessCategory: WellnessCategory };
+  CommonPlayer: { session: any };
   MainTabs: undefined;
 };
 

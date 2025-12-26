@@ -20,6 +20,8 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { RootStackParamList, MainTabParamList, WellnessCategory } from "../../types/navigation";
 import { Routes } from "../../constants/routes";
+import ResumeBadge from "../../components/ResumeBadge";
+
 
 const { width } = Dimensions.get("window");
 
@@ -45,6 +47,7 @@ type LibraryItem = {
   levelTag?: string;
   focusTag?: string;
   thumbnail: string;
+  videoUrl?: string;
   isFavorite?: boolean;
 };
 
@@ -65,6 +68,8 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Back Care",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+
   },
   {
     id: "hs2",
@@ -78,6 +83,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Metabolic",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
   {
     id: "hs3",
@@ -91,6 +97,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Relief",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
 
   {
@@ -105,6 +112,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Morning",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
   {
     id: "lh2",
@@ -118,6 +126,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Sleep",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
 
   {
@@ -132,6 +141,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Mobility",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
   {
     id: "ff2",
@@ -145,6 +155,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Challenge",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
 
   {
@@ -159,6 +170,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Calm",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
   {
     id: "mf2",
@@ -172,6 +184,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Mind",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
 
   {
@@ -186,6 +199,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Desk",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
   {
     id: "of2",
@@ -199,6 +213,7 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Quick",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
+    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
   },
 ];
 
@@ -363,9 +378,22 @@ export default function LibraryScreen() {
                       item={item}
                       isFavorite={!!favorites[item.id]}
                       onToggleFavorite={() => toggleFav(item.id)}
-                      onPress={() => {
-                        // TODO: navigate to player/details
-                      }}
+                      onPress={() =>
+                        navigation.navigate(Routes.COMMON_PLAYER as any, {
+                          session: {
+                            id: item.id,
+                            title: item.title,
+                            instructor: item.instructor,
+                            mode: "recorded",
+                            status: "RECORDED",
+                            videoUrl: item.videoUrl,
+                            posterUrl: item.thumbnail,
+                            description: item.description,
+                            requiresPaid: false,
+                          },
+                          isUserPaid: true,
+                        })
+                      }   
                     />
                   )}
                 />
@@ -438,6 +466,11 @@ function VideoInfoCard({
         <Text style={styles.cardInstructor} numberOfLines={1}>
           with {item.instructor}
         </Text>
+
+        <View style={{ marginTop: 8 }}>
+          <ResumeBadge sessionId={item.id} />
+        </View>
+
 
         <Text style={styles.cardDesc} numberOfLines={2}>
           {item.description}
