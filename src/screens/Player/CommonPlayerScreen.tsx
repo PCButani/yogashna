@@ -15,11 +15,19 @@ import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/nativ
 import { useVideoPlayer, VideoView } from "expo-video";
 
 type RouteParams = {
-  // Keep these flexible so it compiles even if your params have extra fields.
-  uri?: string; // video URL
-  title?: string; // header title
-  isLocked?: boolean; // paid content lock
-  resumeKey?: string; // optional unique key (recommended)
+  // Legacy single session mode
+  session?: any;
+
+  // NEW: Playlist mode
+  playlist?: any[];
+  startIndex?: number;
+  context?: { programId?: string; dayNumber?: number };
+
+  // Optional overrides
+  uri?: string;
+  title?: string;
+  isLocked?: boolean;
+  resumeKey?: string;
 };
 
 const RESUME_PREFIX = "COMMON_PLAYER_RESUME::";
@@ -30,53 +38,76 @@ export default function CommonPlayerScreen() {
 
   const params = (route?.params ?? {}) as RouteParams;
 
-  // Support multiple param names (keeps navigation unchanged)
-const videoUri =
-  (params as any)?.uri ??
-  (params as any)?.videoUri ??
-  (params as any)?.videoUrl ??
-  (params as any)?.url ??
-  (params as any)?.source ??
-  (params as any)?.video?.uri ??
-  (params as any)?.session?.videoUrl ??
-  "";
+  // Build playlist from params
+  const playlist = useMemo(() => {
+    if (params.playlist && params.playlist.length > 0) {
+      return params.playlist;
+    }
+    if (params.session) {
+      return [params.session];
+    }
+    return [];
+  }, [params.playlist, params.session]);
 
-const title =
-  (params as any)?.title ??
-  (params as any)?.videoTitle ??
-  (params as any)?.name ??
-  (params as any)?.session?.title ??
-  "Video";
+  const [currentIndex, setCurrentIndex] = useState(params.startIndex ?? 0);
+  const currentSession = playlist[currentIndex];
 
-const isLocked =
-  !!((params as any)?.isLocked ?? (params as any)?.locked ?? (params as any)?.isPaidContentLocked);
+  // Extract video URL from current session
+  const videoUri = useMemo(() => {
+    if (params.uri) return params.uri;
+    if (!currentSession) return "";
 
+    return (
+      currentSession.videoUrl ??
+      currentSession.videoUri ??
+      currentSession.uri ??
+      currentSession.url ??
+      currentSession.video?.uri ??
+      ""
+    );
+  }, [currentSession, params.uri]);
 
-  // If caller doesn't pass a resumeKey, we fall back to the uri.
+  const title = useMemo(() => {
+    if (params.title) return params.title;
+    if (!currentSession) return "Video";
+
+    return (
+      currentSession.title ??
+      currentSession.videoTitle ??
+      currentSession.name ??
+      "Video"
+    );
+  }, [currentSession, params.title]);
+
+  const isLocked = !!params.isLocked;
+  const hasValidSource = !!videoUri;
+  const isPlaylist = playlist.length > 1;
+
+  // Resume storage key
   const resumeStorageKey = useMemo(() => {
-    const base = params.resumeKey?.trim() ? params.resumeKey.trim() : videoUri;
+    const base = params.resumeKey?.trim()
+      ? params.resumeKey.trim()
+      : currentSession?.id || videoUri;
     return `${RESUME_PREFIX}${base}`;
-  }, [params.resumeKey, videoUri]);
+  }, [params.resumeKey, currentSession, videoUri]);
 
   const [showHeader, setShowHeader] = useState(true);
+  const [showControls, setShowControls] = useState(false);
   const { width, height } = useWindowDimensions();
   const isLandscape = width > height;
   const [isReady, setIsReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const lastSavedTimeRef = useRef<number>(0);
   const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const isMountedRef = useRef(true);
 
   const player = useVideoPlayer(videoUri || null, (p) => {
-    // IMPORTANT: we do NOT auto-play if locked
     if (isLocked) {
       p.pause();
       return;
     }
-    // Keep behavior close to expo-av defaults (no looping unless you had it)
     p.loop = false;
   });
-
-  // If videoUri is empty, don't crash. Show a simple message.
-  const hasValidSource = !!videoUri;
 
   const stopSaveTimer = useCallback(() => {
     if (saveTimerRef.current) {
@@ -88,11 +119,10 @@ const isLocked =
   const persistResumeTime = useCallback(
     async (timeSeconds: number) => {
       try {
-        // Save only if meaningful (> 1s)
         if (!Number.isFinite(timeSeconds) || timeSeconds < 1) return;
         await AsyncStorage.setItem(resumeStorageKey, String(timeSeconds));
       } catch {
-        // ignore storage errors (do not crash playback)
+        // ignore
       }
     },
     [resumeStorageKey]
@@ -100,11 +130,9 @@ const isLocked =
 
   const startSaveTimer = useCallback(() => {
     stopSaveTimer();
-    // Save every 2 seconds while playing (simple + robust)
     saveTimerRef.current = setInterval(() => {
       try {
         const t = Number(player?.currentTime ?? 0);
-        // Avoid writing too often if time hasn't moved
         if (t > 0 && Math.abs(t - lastSavedTimeRef.current) >= 1) {
           lastSavedTimeRef.current = t;
           void persistResumeTime(t);
@@ -116,16 +144,14 @@ const isLocked =
   }, [persistResumeTime, player, stopSaveTimer]);
 
   const loadAndSeekResume = useCallback(async () => {
-    if (!hasValidSource) return;
-    if (isLocked) return;
+    if (!hasValidSource || isLocked) return;
 
     try {
       const raw = await AsyncStorage.getItem(resumeStorageKey);
       const t = raw ? Number(raw) : 0;
 
-      // Seek only if we have a valid saved time
       if (Number.isFinite(t) && t > 1) {
-        player.currentTime = t; // expo-video uses seconds for currentTime
+        player.currentTime = t;
         lastSavedTimeRef.current = t;
       }
     } catch {
@@ -133,29 +159,68 @@ const isLocked =
     }
   }, [hasValidSource, isLocked, player, resumeStorageKey]);
 
-  // When screen focuses: load resume & start saving while playing
+  // Load video when currentIndex changes
+  const loadVideo = useCallback(async () => {
+    if (!hasValidSource || !player || !isMountedRef.current) return;
+
+    setIsReady(false);
+    setLoadError(false);
+
+    try {
+      // Use replaceAsync instead of replace to avoid iOS warning
+      if (typeof player.replaceAsync === 'function') {
+        await player.replaceAsync(videoUri);
+      } else {
+        // Fallback for older versions
+        player.replace(videoUri);
+      }
+
+      if (!isMountedRef.current) return;
+
+      // Load resume position for new video
+      await loadAndSeekResume();
+
+      if (!isMountedRef.current) return;
+
+      // Start playing if not locked
+      if (!isLocked) {
+        try {
+          player.play();
+        } catch {
+          // ignore
+        }
+      }
+
+      setIsReady(true);
+    } catch (error) {
+      console.error("Failed to load video:", error);
+      if (isMountedRef.current) {
+        setLoadError(true);
+        setIsReady(true);
+      }
+    }
+  }, [hasValidSource, player, videoUri, loadAndSeekResume, isLocked]);
+
+  // When currentIndex changes, load new video
+  useEffect(() => {
+    void loadVideo();
+  }, [currentIndex, videoUri]);
+
+  // Screen focus/blur handling
   useFocusEffect(
     useCallback(() => {
-      let cancelled = false;
+      isMountedRef.current = true;
 
       const run = async () => {
-        if (cancelled) return;
+        if (!isMountedRef.current) return;
 
-        setIsReady(false);
-
-        // Mark ready once player is attached; give a short tick.
-        // (Keeps UI behavior stable without depending on internal events.)
-        setTimeout(() => {
-          if (!cancelled) setIsReady(true);
-        }, 50);
-
-        await loadAndSeekResume();
-
-        // Keep same general behavior: auto-play when screen opens (if not locked)
-        if (!isLocked) {
+        if (!isLocked && hasValidSource) {
           try {
-            player.play();
-            startSaveTimer();
+            await loadAndSeekResume();
+            if (isMountedRef.current) {
+              player.play();
+              startSaveTimer();
+            }
           } catch {
             // ignore
           }
@@ -165,8 +230,7 @@ const isLocked =
       void run();
 
       return () => {
-        cancelled = true;
-        // Save once on leaving the screen + pause
+        isMountedRef.current = false;
         stopSaveTimer();
         try {
           const t = Number(player?.currentTime ?? 0);
@@ -176,10 +240,10 @@ const isLocked =
           // ignore
         }
       };
-    }, [isLocked, loadAndSeekResume, persistResumeTime, player, startSaveTimer, stopSaveTimer])
+    }, [isLocked, hasValidSource, loadAndSeekResume, persistResumeTime, player, startSaveTimer, stopSaveTimer])
   );
 
-  // If locked, force pause and stop saving
+  // Lock handling
   useEffect(() => {
     if (isLocked) {
       stopSaveTimer();
@@ -191,12 +255,19 @@ const isLocked =
     }
   }, [isLocked, player, stopSaveTimer]);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const onToggleHeader = useCallback(() => {
     setShowHeader((s) => !s);
+    setShowControls((s) => !s);
   }, []);
 
   const onBack = useCallback(async () => {
-    // Save before leaving
     stopSaveTimer();
     try {
       const t = Number(player?.currentTime ?? 0);
@@ -208,32 +279,57 @@ const isLocked =
     navigation.goBack();
   }, [navigation, persistResumeTime, player, stopSaveTimer]);
 
+  const handlePrevious = useCallback(() => {
+    if (currentIndex > 0) {
+      setCurrentIndex(prev => prev - 1);
+    }
+  }, [currentIndex]);
+
+  const handleNext = useCallback(() => {
+    if (currentIndex < playlist.length - 1) {
+      setCurrentIndex(prev => prev + 1);
+    }
+  }, [currentIndex, playlist.length]);
+
+  const handleRetry = useCallback(() => {
+    setLoadError(false);
+    void loadVideo();
+  }, [loadVideo]);
+
+  const canGoPrevious = currentIndex > 0;
+  const canGoNext = currentIndex < playlist.length - 1;
+
+  // Session info for playlist mode
+  const sessionInfo = useMemo(() => {
+    if (!currentSession) return null;
+    return {
+      duration: currentSession.durationMin || currentSession.duration || null,
+      style: currentSession.style || null,
+    };
+  }, [currentSession]);
+
   return (
     <View style={styles.safe}>
-      {/* Tap-to-toggle overlay header */}
       <Pressable style={styles.playerWrap} onPress={onToggleHeader}>
         {/* Video */}
-        {hasValidSource ? (
+        {hasValidSource && !loadError ? (
           <View style={styles.videoContainer}>
             <VideoView
-              key={isLandscape ? "landscape" : "portrait"} // forces correct resize on rotation
+              key={`${currentIndex}-${isLandscape ? "landscape" : "portrait"}`}
               style={styles.video}
               player={player}
-              nativeControls={!isLocked} // keep controls for recorded content; disable if locked
+              nativeControls={!isLocked}
               requiresLinearPlayback={false}
               fullscreenOptions={{ enable: false }}
               allowsPictureInPicture={!isLocked}
-              contentFit={isLandscape ? "cover" : "contain"} // fills more in landscape
-              // Android note: surfaceType="textureView" can help in some overlay scenarios
-              // but we keep minimal changes. Uncomment only if you see Android rendering issues.
-              // surfaceType="textureView"
+              contentFit={isLandscape ? "cover" : "contain"}
             />
-
 
             {/* Loading overlay */}
             {!isReady && (
               <View style={styles.loadingOverlay}>
                 <ActivityIndicator size="large" color="#FFFFFF" />
+                <Text style={styles.loadingText}>Loading video...</Text>
               </View>
             )}
 
@@ -245,14 +341,9 @@ const isLocked =
                 <Text style={styles.lockSub}>
                   This content is for paid members.
                 </Text>
-
-                {/* Keep button behavior generic (no navigation changes) */}
                 <TouchableOpacity
                   style={styles.lockBtn}
-                  onPress={() => {
-                    // You can connect this to your paywall later.
-                    // For now, we keep the same UI/UX behavior (locked overlay).
-                  }}
+                  onPress={() => {}}
                   activeOpacity={0.85}
                 >
                   <Text style={styles.lockBtnText}>Unlock to Watch</Text>
@@ -260,31 +351,113 @@ const isLocked =
               </View>
             )}
           </View>
+        ) : loadError ? (
+          <View style={styles.empty}>
+            <Ionicons name="alert-circle" size={48} color="#EF4444" />
+            <Text style={styles.emptyTitle}>Video failed to load</Text>
+            <Text style={styles.emptyText}>
+              There was a problem loading this video. Please try again.
+            </Text>
+            <View style={styles.emptyButtons}>
+              <TouchableOpacity style={styles.retryBtn} onPress={handleRetry}>
+                <Ionicons name="refresh" size={18} color="#FFFFFF" />
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.emptyBackBtn} onPress={onBack}>
+                <Text style={styles.emptyBackBtnText}>Go Back</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
         ) : (
           <View style={styles.empty}>
-            <Ionicons name="alert-circle" size={26} color="#111" />
-            <Text style={styles.emptyText}>Video source missing.</Text>
+            <Ionicons name="alert-circle" size={48} color="#9CA3AF" />
+            <Text style={styles.emptyTitle}>Video source not available yet</Text>
+            <Text style={styles.emptyText}>
+              This session is coming soon. Check back later!
+            </Text>
+            <TouchableOpacity style={styles.emptyBtn} onPress={onBack}>
+              <Text style={styles.emptyBtnText}>Go Back</Text>
+            </TouchableOpacity>
           </View>
         )}
 
-        {/* Header overlay (tap toggles) */}
-        {showHeader && (
+        {/* Header overlay */}
+        {showHeader && !loadError && (
           <View style={styles.header} pointerEvents="box-none">
             <View style={styles.headerRow}>
               <TouchableOpacity onPress={onBack} style={styles.backBtn} hitSlop={10}>
                 <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
               </TouchableOpacity>
-              <Text style={styles.headerTitle} numberOfLines={1}>
-                {title || "Video"}
-              </Text>
+              <View style={styles.headerCenter}>
+                <Text style={styles.headerTitle} numberOfLines={1}>
+                  {title}
+                </Text>
+                {sessionInfo && (
+                  <View style={styles.headerMeta}>
+                    {sessionInfo.duration && (
+                      <Text style={styles.headerMetaText}>
+                        {sessionInfo.duration} min
+                      </Text>
+                    )}
+                    {sessionInfo.style && sessionInfo.duration && (
+                      <Text style={styles.headerMetaText}> • </Text>
+                    )}
+                    {sessionInfo.style && (
+                      <Text style={styles.headerMetaText}>
+                        {sessionInfo.style}
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </View>
               <View style={styles.headerRight} />
             </View>
           </View>
         )}
-      </Pressable>
 
-      {/* (Keep any existing bottom UI identical in your old file.
-          If you had extra metadata/actions below the video, add them back exactly as before.) */}
+        {/* Playlist Controls */}
+        {isPlaylist && showControls && hasValidSource && !loadError && (
+          <View style={styles.playlistControls} pointerEvents="box-none">
+            <View style={styles.playlistRow}>
+              <TouchableOpacity
+                style={[styles.navBtn, !canGoPrevious && styles.navBtnDisabled]}
+                onPress={handlePrevious}
+                disabled={!canGoPrevious}
+              >
+                <Ionicons
+                  name="play-skip-back"
+                  size={24}
+                  color={canGoPrevious ? "#FFFFFF" : "#666666"}
+                />
+                <Text style={[styles.navText, !canGoPrevious && styles.navTextDisabled]}>
+                  Previous
+                </Text>
+              </TouchableOpacity>
+
+              <View style={styles.playlistInfo}>
+                <Text style={styles.playlistText}>
+                  {currentIndex + 1} of {playlist.length}
+                </Text>
+              </View>
+
+              <TouchableOpacity
+                style={[styles.navBtn, !canGoNext && styles.navBtnDisabled]}
+                onPress={handleNext}
+                disabled={!canGoNext}
+              >
+                <Text style={[styles.navText, !canGoNext && styles.navTextDisabled]}>
+                  Next
+                </Text>
+                <Ionicons
+                  name="play-skip-forward"
+                  size={24}
+                  color={canGoNext ? "#FFFFFF" : "#666666"}
+                />
+              </TouchableOpacity>
+            </View>
+          </View>
+        )}
+      </Pressable>
     </View>
   );
 }
@@ -313,7 +486,7 @@ const styles = StyleSheet.create({
     paddingTop: Platform.OS === "android" ? 40 : 55,
     paddingBottom: 12,
     paddingHorizontal: 14,
-    backgroundColor: "rgba(0,0,0,0.55)",
+    backgroundColor: "rgba(0,0,0,0.7)",
   },
   headerRow: {
     flexDirection: "row",
@@ -325,12 +498,24 @@ const styles = StyleSheet.create({
     alignItems: "flex-start",
     justifyContent: "center",
   },
-  headerTitle: {
+  headerCenter: {
     flex: 1,
+    marginLeft: 6,
+  },
+  headerTitle: {
     color: "#FFFFFF",
     fontSize: 16,
     fontWeight: "700",
-    marginLeft: 6,
+  },
+  headerMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginTop: 2,
+  },
+  headerMetaText: {
+    color: "rgba(255,255,255,0.8)",
+    fontSize: 13,
+    fontWeight: "600",
   },
   headerRight: {
     width: 40,
@@ -340,7 +525,13 @@ const styles = StyleSheet.create({
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
     justifyContent: "center",
-    backgroundColor: "rgba(0,0,0,0.25)",
+    backgroundColor: "rgba(0,0,0,0.5)",
+    gap: 12,
+  },
+  loadingText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "600",
   },
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -374,14 +565,115 @@ const styles = StyleSheet.create({
   },
   empty: {
     flex: 1,
-    backgroundColor: "#FFFFFF",
+    backgroundColor: "#1F2937",
     alignItems: "center",
     justifyContent: "center",
-    gap: 10,
+    gap: 12,
+    paddingHorizontal: 32,
+  },
+  emptyTitle: {
+    color: "#F3F4F6",
+    fontSize: 18,
+    fontWeight: "800",
+    textAlign: "center",
   },
   emptyText: {
-    color: "#111111",
+    color: "#D1D5DB",
+    fontSize: 14,
+    fontWeight: "600",
+    textAlign: "center",
+    lineHeight: 20,
+  },
+  emptyButtons: {
+    flexDirection: "row",
+    gap: 12,
+    marginTop: 8,
+  },
+  retryBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 6,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#2E6B4F",
+  },
+  retryBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  emptyBackBtn: {
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "rgba(255,255,255,0.1)",
+    borderWidth: 1,
+    borderColor: "rgba(255,255,255,0.2)",
+  },
+  emptyBackBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+  emptyBtn: {
+    marginTop: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderRadius: 12,
+    backgroundColor: "#2E6B4F",
+  },
+  emptyBtnText: {
+    color: "#FFFFFF",
+    fontSize: 14,
+    fontWeight: "800",
+  },
+
+  // Playlist Controls
+  playlistControls: {
+    position: "absolute",
+    bottom: 0,
+    left: 0,
+    right: 0,
+    paddingBottom: Platform.OS === "android" ? 20 : 40,
+    paddingHorizontal: 20,
+    backgroundColor: "rgba(0,0,0,0.7)",
+  },
+  playlistRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingVertical: 16,
+  },
+  navBtn: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 8,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: "rgba(255,255,255,0.1)",
+  },
+  navBtnDisabled: {
+    opacity: 0.3,
+  },
+  navText: {
+    color: "#FFFFFF",
     fontSize: 14,
     fontWeight: "700",
+  },
+  navTextDisabled: {
+    color: "#666666",
+  },
+  playlistInfo: {
+    paddingVertical: 6,
+    paddingHorizontal: 14,
+    borderRadius: 999,
+    backgroundColor: "rgba(46,107,79,0.9)",
+  },
+  playlistText: {
+    color: "#FFFFFF",
+    fontSize: 13,
+    fontWeight: "800",
   },
 });

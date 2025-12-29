@@ -23,6 +23,8 @@ import { Routes } from "../../constants/routes";
 import ResumeBadge from "../../components/ResumeBadge";
 
 
+
+
 const { width } = Dimensions.get("window");
 
 /* =========================
@@ -47,7 +49,7 @@ type LibraryItem = {
   levelTag?: string;
   focusTag?: string;
   thumbnail: string;
-  videoUrl?: string;
+  programId: string; // ✅ Map to actual program ID
   isFavorite?: boolean;
 };
 
@@ -59,89 +61,88 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
   {
     id: "hs1",
     section: "Health Support",
-    title: "Back Pain Relief Flow",
+    title: "Back Pain Relief Program",
     instructor: "Ari Sol",
-    description: "Gentle spine mobility to ease lower back tension and stiffness.",
-    durationLabel: "14 min",
+    description: "14-day journey to ease lower back tension with gentle spine mobility.",
+    durationLabel: "14 days",
     rating: 4.8,
     levelTag: "Gentle",
     focusTag: "Back Care",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
-
+    programId: "prog_back_relief_21", // Map to existing program
   },
   {
     id: "hs2",
     section: "Health Support",
-    title: "Diabetes Support Stretch",
+    title: "Diabetes Support Program",
     instructor: "Willow Grace",
-    description: "Support metabolism and circulation with a slow, steady sequence.",
-    durationLabel: "18 min",
+    description: "Support metabolism and circulation with a 21-day steady sequence.",
+    durationLabel: "21 days",
     rating: 4.7,
     levelTag: "All Levels",
     focusTag: "Metabolic",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_diabetes_30",
   },
   {
     id: "hs3",
     section: "Health Support",
-    title: "Neck & Shoulder Release",
+    title: "Neck & Shoulder Relief",
     instructor: "Luna Nocturne",
-    description: "Unwind desk tightness and tension headaches with easy movements.",
-    durationLabel: "10 min",
+    description: "7-day program to unwind desk tightness and tension headaches.",
+    durationLabel: "7 days",
     rating: 4.9,
     levelTag: "Beginner",
     focusTag: "Relief",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_back_relief_21",
   },
 
   {
     id: "lh1",
     section: "Lifestyle & Habits",
-    title: "Morning Energy Reset",
+    title: "Morning Energy Program",
     instructor: "Ari Sol",
-    description: "Wake up your body with a short routine you can repeat daily.",
-    durationLabel: "12 min",
+    description: "14-day morning routine to energize your body daily.",
+    durationLabel: "14 days",
     rating: 4.8,
     levelTag: "All Levels",
     focusTag: "Morning",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_back_relief_21",
   },
   {
     id: "lh2",
     section: "Lifestyle & Habits",
-    title: "Better Sleep Wind-Down",
+    title: "Better Sleep Program",
     instructor: "Luna Nocturne",
-    description: "A calming evening flow + breath to prepare for deep sleep.",
-    durationLabel: "16 min",
+    description: "21-day evening flow + breath practice for deep sleep.",
+    durationLabel: "21 days",
     rating: 4.9,
     levelTag: "Gentle",
     focusTag: "Sleep",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_diabetes_30",
   },
 
   {
     id: "ff1",
     section: "Fitness & Flexibility",
-    title: "Hip Opening Flow",
+    title: "Hip Opening Program",
     instructor: "Willow Grace",
-    description: "Open hips, improve mobility, and reduce lower-back tightness.",
-    durationLabel: "18 min",
+    description: "21-day journey to open hips and improve mobility.",
+    durationLabel: "21 days",
     rating: 4.7,
     levelTag: "Gentle",
     focusTag: "Mobility",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_back_relief_21",
   },
   {
     id: "ff2",
@@ -155,65 +156,65 @@ const ALL_LIBRARY_ITEMS: LibraryItem[] = [
     focusTag: "Challenge",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_diabetes_30",
   },
 
   {
     id: "mf1",
     section: "Mindfulness",
-    title: "Breath Reset",
+    title: "Breath Reset Program",
     instructor: "Ari Sol",
-    description: "A calming breath practice for stress relief and better focus.",
-    durationLabel: "6 min",
+    description: "14-day breath practice for stress relief and better focus.",
+    durationLabel: "14 days",
     rating: 4.9,
     levelTag: "Beginner",
     focusTag: "Calm",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_back_relief_21",
   },
   {
     id: "mf2",
     section: "Mindfulness",
-    title: "5-Min Meditation Break",
+    title: "Meditation Program",
     instructor: "Luna Nocturne",
-    description: "A short guided reset for clarity, patience, and calm attention.",
-    durationLabel: "5 min",
+    description: "21-day guided journey for clarity, patience, and calm attention.",
+    durationLabel: "21 days",
     rating: 4.8,
     levelTag: "Beginner",
     focusTag: "Mind",
     thumbnail:
       "https://images.unsplash.com/photo-1552058544-f2b08422138a?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_diabetes_30",
   },
 
   {
     id: "of1",
     section: "Office Yoga",
-    title: "Desk Posture Fix",
+    title: "Desk Posture Program",
     instructor: "Willow Grace",
-    description: "Quick posture routine for neck, shoulders, and upper back.",
-    durationLabel: "7 min",
+    description: "7-day routine for neck, shoulders, and upper back.",
+    durationLabel: "7 days",
     rating: 4.7,
     levelTag: "Beginner",
     focusTag: "Desk",
     thumbnail:
       "https://images.unsplash.com/photo-1544367567-0f2fcb009e0b?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_back_relief_21",
   },
   {
     id: "of2",
     section: "Office Yoga",
-    title: "2-Min Chair Stretch",
+    title: "Chair Stretch Program",
     instructor: "Ari Sol",
-    description: "Micro-break stretch you can do between meetings—no mat needed.",
-    durationLabel: "2 min",
+    description: "14-day micro-break stretches you can do between meetings.",
+    durationLabel: "14 days",
     rating: 4.8,
     levelTag: "Beginner",
     focusTag: "Quick",
     thumbnail:
       "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=1200&q=80",
-    videoUrl: "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4",
+    programId: "prog_diabetes_30",
   },
 ];
 
@@ -299,6 +300,10 @@ export default function LibraryScreen() {
     navigation.navigate(Routes.WELLNESS_GOALS, { wellnessCategory });
   };
 
+  const handleProgramPress = (programId: string) => {
+    navigation.navigate(Routes.PROGRAM_DETAIL, { programId });
+  };
+
   return (
     <SafeAreaView style={styles.safe}>
       <View style={styles.statusBarSpacer} />
@@ -308,7 +313,7 @@ export default function LibraryScreen() {
         <View style={styles.header}>
           <View>
             <Text style={styles.title}>Library</Text>
-            <Text style={styles.subtitle}>Pick a section. Find the right session fast.</Text>
+            <Text style={styles.subtitle}>Explore programs & find your journey</Text>
           </View>
 
           <TouchableOpacity style={styles.iconBtn} activeOpacity={0.85}>
@@ -322,7 +327,7 @@ export default function LibraryScreen() {
           <TextInput
             value={query}
             onChangeText={setQuery}
-            placeholder="Search sleep, back pain, office, breathing..."
+            placeholder="Search programs, goals, instructors..."
             placeholderTextColor="#A0AEC0"
             style={styles.searchInput}
             returnKeyType="search"
@@ -374,26 +379,11 @@ export default function LibraryScreen() {
                   columnWrapperStyle={styles.gridRow}
                   scrollEnabled={false}
                   renderItem={({ item }) => (
-                    <VideoInfoCard
+                    <ProgramInfoCard
                       item={item}
                       isFavorite={!!favorites[item.id]}
                       onToggleFavorite={() => toggleFav(item.id)}
-                      onPress={() =>
-                        navigation.navigate(Routes.COMMON_PLAYER as any, {
-                          session: {
-                            id: item.id,
-                            title: item.title,
-                            instructor: item.instructor,
-                            mode: "recorded",
-                            status: "RECORDED",
-                            videoUrl: item.videoUrl,
-                            posterUrl: item.thumbnail,
-                            description: item.description,
-                            requiresPaid: false,
-                          },
-                          isUserPaid: true,
-                        })
-                      }   
+                      onPress={() => handleProgramPress(item.programId)}
                     />
                   )}
                 />
@@ -412,7 +402,7 @@ export default function LibraryScreen() {
    COMPONENTS
 ========================= */
 
-function VideoInfoCard({
+function ProgramInfoCard({
   item,
   isFavorite,
   onToggleFavorite,
@@ -441,9 +431,7 @@ function VideoInfoCard({
           />
         </TouchableOpacity>
 
-        <View style={styles.playOverlay}>
-          <Ionicons name="play" size={20} color="#FFF" />
-        </View>
+        {/* ❌ REMOVED PLAY OVERLAY */}
 
         <View style={styles.cardBottomOverlay}>
           <View style={styles.statPill}>
@@ -602,15 +590,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
 
-  playOverlay: {
-    position: "absolute",
-    left: 0,
-    right: 0,
-    top: 0,
-    bottom: 0,
-    alignItems: "center",
-    justifyContent: "center",
-  },
+  // ❌ REMOVED playOverlay style
 
   cardBottomOverlay: {
     position: "absolute",

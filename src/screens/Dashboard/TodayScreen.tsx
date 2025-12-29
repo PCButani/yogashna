@@ -62,7 +62,7 @@ export default function TodayScreen() {
           <View>
             <Text style={styles.greeting}>Good evening, there 🌙</Text>
             <Text style={styles.subGreeting}>
-              Today's Strength flow is ready
+              Today's Abhyāsa is ready
             </Text>
           </View>
 
@@ -83,9 +83,9 @@ export default function TodayScreen() {
               <Ionicons name="sunny-outline" size={18} color="#2E6B4F" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.cardTag}>Today's Practice</Text>
+              <Text style={styles.cardTag}>Today's Abhyāsa</Text>
               <Text style={styles.cardRecText}>
-                Recommended for you • Focus: {String(focus)}
+                A practice designed for your body and goals
               </Text>
             </View>
           </View>

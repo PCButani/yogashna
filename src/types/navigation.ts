@@ -26,7 +26,14 @@ export type RootStackParamList = {
   PlanSummary: undefined;
   Today: undefined;
   WellnessGoals: { wellnessCategory: WellnessCategory };
-  CommonPlayer: { session: any };
+  ProgramDetail: { programId: string };
+  CommonPlayer: {
+    // Support both single session (legacy) and playlist modes
+    session?: any; // Legacy: single session
+    playlist?: any[]; // NEW: array of sessions for auto-advance
+    startIndex?: number; // Which session to start with (default: 0)
+    context?: { programId?: string; dayNumber?: number }; // Optional context
+  };
   MainTabs: undefined;
 };
 

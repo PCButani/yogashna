@@ -247,16 +247,16 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* My Practice Focus */}
+        {/* My Yoga Abhyāsa */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name={"compass-outline"} size={18} color="#16A34A" />
-              <Text style={styles.sectionTitle}>My Practice Focus</Text>
+              <Text style={styles.sectionTitle}>My Yoga Abhyāsa</Text>
             </View>
 
             <TouchableOpacity onPress={() => {}} activeOpacity={0.8}>
-              <Text style={styles.linkText}>Edit</Text>
+              <Text style={styles.linkText}>Edit My Practice</Text>
             </TouchableOpacity>
           </View>
 

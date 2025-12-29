@@ -8,9 +8,13 @@ import {
   FlatList,
   Image,
   Dimensions,
+  TextInput,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
+import { Routes } from "../../constants/routes";
+import { mockPrograms } from "../../data/mock/programs";
+import { Program } from "../../data/mock/models";
 
 /* =========================================================
    TYPES
@@ -23,96 +27,6 @@ type WellnessCategory =
   | "Beginners & Mindfulness"
   | "Office Yoga";
 
-type LibraryItem = {
-  id: string;
-  title: string;
-  durationMin: number;
-  intensity: "Gentle" | "Moderate" | "Strong";
-  wellnessCategory: WellnessCategory;
-  goal: string;
-  benefit: string;
-  thumbnailUrl?: string;
-  isPaid?: boolean;
-};
-
-/* =========================================================
-   MOCK VIDEO DATA (replace later from tracker)
-========================================================= */
-
-const FALLBACK_IMAGE =
-  "https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=900&q=80";
-
-const VIDEOS: LibraryItem[] = [
-  {
-    id: "1",
-    title: "Lower Back Relief Flow",
-    durationMin: 12,
-    intensity: "Gentle",
-    wellnessCategory: "Health Support",
-    goal: "Reduce Back Pain & Improve Posture",
-    benefit: "Relieves lower back pain and improves posture.",
-  },
-  {
-    id: "2",
-    title: "Diabetes Care Yoga",
-    durationMin: 15,
-    intensity: "Moderate",
-    wellnessCategory: "Health Support",
-    goal: "Manage Diabetes with Lifestyle Yoga",
-    benefit: "Supports blood sugar management.",
-    isPaid: true,
-  },
-  {
-    id: "3",
-    title: "Sleep Support Breathing",
-    durationMin: 10,
-    intensity: "Gentle",
-    wellnessCategory: "Health Support",
-    goal: "Improve Sleep & Reduce Insomnia",
-    benefit: "Calms nervous system for better sleep.",
-  },
-];
-
-/* =========================================================
-   GOALS BY WELLNESS
-========================================================= */
-
-const GOALS_BY_WELLNESS: Record<WellnessCategory, string[]> = {
-  "Health Support": [
-    "Reduce Back Pain & Improve Posture",
-    "Manage Diabetes with Lifestyle Yoga",
-    "Support Weight Loss / Obesity",
-    "Improve Sleep & Reduce Insomnia",
-  ],
-  "Lifestyle & Habits": [
-    "Build Daily Consistency",
-    "Improve Energy & Focus",
-    "Reduce Stress Quickly",
-  ],
-  "Fitness & Flexibility": [
-    "Improve Flexibility",
-    "Strength & Stability",
-  ],
-  "Beginners & Mindfulness": [
-    "Beginner Yoga Foundations",
-    "Gentle Full-Body Reset",
-  ],
-  "Office Yoga": [
-    "Neck & Shoulder Relief",
-    "Lower Back Desk Reset",
-  ],
-};
-
-/* =========================================================
-   HELPERS
-========================================================= */
-
-function intensityDots(level: LibraryItem["intensity"]) {
-  if (level === "Gentle") return 1;
-  if (level === "Moderate") return 2;
-  return 3;
-}
-
 /* =========================================================
    SCREEN
 ========================================================= */
@@ -124,17 +38,56 @@ export default function WellnessGoalsScreen() {
   const wellnessCategory: WellnessCategory =
     route.params?.wellnessCategory ?? "Health Support";
 
-  const goals = GOALS_BY_WELLNESS[wellnessCategory] || [];
+  const [searchText, setSearchText] = useState("");
+  const [activeGoal, setActiveGoal] = useState<string>("All");
 
-  const [activeGoal, setActiveGoal] = useState<string>(goals[0]);
+  // Filter programs by wellness category
+  const categoryPrograms = useMemo(() => {
+    return mockPrograms.filter((p) => p.category === wellnessCategory);
+  }, [wellnessCategory]);
 
-  const filteredVideos = useMemo(() => {
-    return VIDEOS.filter(
-      (v) =>
-        v.wellnessCategory === wellnessCategory &&
-        (!activeGoal || v.goal === activeGoal)
-    );
-  }, [wellnessCategory, activeGoal]);
+  // Extract unique goals from filtered programs
+  const availableGoals = useMemo(() => {
+    const goals = new Set<string>();
+    categoryPrograms.forEach((p) => {
+      if (p.tags && p.tags.length > 0) {
+        p.tags.forEach((tag) => goals.add(tag));
+      }
+    });
+    return ["All", ...Array.from(goals)];
+  }, [categoryPrograms]);
+
+  // Apply search and goal filters
+  const filteredPrograms = useMemo(() => {
+    let results = categoryPrograms;
+
+    // Filter by goal
+    if (activeGoal !== "All") {
+      results = results.filter((p) => p.tags?.includes(activeGoal));
+    }
+
+    // Filter by search text
+    if (searchText.trim()) {
+      const search = searchText.toLowerCase();
+      results = results.filter(
+        (p) =>
+          p.title.toLowerCase().includes(search) ||
+          p.subtitle.toLowerCase().includes(search) ||
+          p.sanskritTitle?.toLowerCase().includes(search)
+      );
+    }
+
+    return results;
+  }, [categoryPrograms, activeGoal, searchText]);
+
+  const handleClearFilters = () => {
+    setSearchText("");
+    setActiveGoal("All");
+  };
+
+  const handleProgramPress = (program: Program) => {
+    navigation.navigate(Routes.PROGRAM_DETAIL, { programId: program.id });
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -147,51 +100,87 @@ export default function WellnessGoalsScreen() {
           <Ionicons name="chevron-back" size={20} color="#111827" />
         </TouchableOpacity>
 
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={styles.title}>{wellnessCategory}</Text>
-          <Text style={styles.subtitle}>
-            Choose a goal & explore practices
-          </Text>
+          <Text style={styles.subtitle}>Explore sessions & programs</Text>
         </View>
       </View>
 
-      {/* Goals */}
-      <View style={styles.goalsWrap}>
-        {goals.map((g) => {
-          const selected = activeGoal === g;
-          return (
-            <TouchableOpacity
-              key={g}
-              onPress={() => setActiveGoal(g)}
-              style={[styles.goalChip, selected && styles.goalChipActive]}
-            >
-              <Text
-                style={[
-                  styles.goalText,
-                  selected && styles.goalTextActive,
-                ]}
-              >
-                {g}
-              </Text>
+      {/* Search Bar */}
+      <View style={styles.searchWrap}>
+        <View style={styles.searchBox}>
+          <Ionicons name="search-outline" size={20} color="#6B7280" />
+          <TextInput
+            style={styles.searchInput}
+            placeholder="Search sessions…"
+            placeholderTextColor="#9CA3AF"
+            value={searchText}
+            onChangeText={setSearchText}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          {searchText.length > 0 && (
+            <TouchableOpacity onPress={() => setSearchText("")}>
+              <Ionicons name="close-circle" size={20} color="#9CA3AF" />
             </TouchableOpacity>
-          );
-        })}
+          )}
+        </View>
       </View>
 
-      {/* Video Grid */}
+      {/* Goal Filter Chips */}
+      <View style={styles.goalsWrap}>
+        <FlatList
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          data={availableGoals}
+          keyExtractor={(item) => item}
+          contentContainerStyle={styles.goalsContent}
+          renderItem={({ item: goal }) => {
+            const selected = activeGoal === goal;
+            return (
+              <TouchableOpacity
+                onPress={() => setActiveGoal(goal)}
+                style={[styles.goalChip, selected && styles.goalChipActive]}
+              >
+                <Text
+                  style={[styles.goalText, selected && styles.goalTextActive]}
+                >
+                  {goal}
+                </Text>
+              </TouchableOpacity>
+            );
+          }}
+        />
+      </View>
+
+      {/* Programs Grid */}
       <FlatList
-        data={filteredVideos}
+        data={filteredPrograms}
         keyExtractor={(item) => item.id}
         numColumns={2}
-        columnWrapperStyle={{ gap: 12 }}
+        columnWrapperStyle={styles.columnWrapper}
         contentContainerStyle={styles.grid}
-        renderItem={({ item }) => <VideoTile item={item} />}
+        showsVerticalScrollIndicator={false}
+        renderItem={({ item }) => (
+          <ProgramCard program={item} onPress={() => handleProgramPress(item)} />
+        )}
         ListEmptyComponent={
           <View style={styles.emptyWrap}>
-            <Text style={styles.emptyTitle}>No videos yet</Text>
+            <Ionicons name="search-outline" size={48} color="#D1D5DB" />
+            <Text style={styles.emptyTitle}>No programs found</Text>
             <Text style={styles.emptySub}>
-              Videos for this goal will be added soon.
+              {searchText || activeGoal !== "All"
+                ? "Try adjusting your filters"
+                : "No programs available for this category yet"}
             </Text>
+            {(searchText || activeGoal !== "All") && (
+              <TouchableOpacity
+                style={styles.clearBtn}
+                onPress={handleClearFilters}
+              >
+                <Text style={styles.clearBtnText}>Clear filters</Text>
+              </TouchableOpacity>
+            )}
           </View>
         }
       />
@@ -200,48 +189,58 @@ export default function WellnessGoalsScreen() {
 }
 
 /* =========================================================
-   VIDEO TILE (same look as Library)
+   PROGRAM CARD COMPONENT
 ========================================================= */
 
-function VideoTile({ item }: { item: LibraryItem }) {
+function ProgramCard({
+  program,
+  onPress,
+}: {
+  program: Program;
+  onPress: () => void;
+}) {
   return (
-    <TouchableOpacity style={styles.tile} activeOpacity={0.9}>
-      <View style={styles.thumb}>
+    <TouchableOpacity style={styles.card} activeOpacity={0.9} onPress={onPress}>
+      {/* Thumbnail */}
+      <View style={styles.cardThumb}>
         <Image
-          source={{ uri: item.thumbnailUrl || FALLBACK_IMAGE }}
-          style={styles.image}
+          source={{ uri: program.bannerImage }}
+          style={styles.cardImage}
         />
 
-        <View style={styles.playBtn}>
-          <Ionicons name="play" size={16} color="#1F6F57" />
-        </View>
-
-        {item.isPaid && (
-          <View style={styles.proTag}>
-            <Text style={styles.proText}>PRO</Text>
+        {/* Badges Overlay */}
+        <View style={styles.badgesOverlay}>
+          <View style={styles.levelBadge}>
+            <Text style={styles.levelText}>{program.level}</Text>
           </View>
-        )}
+        </View>
       </View>
 
-      <Text style={styles.tileTitle} numberOfLines={1}>
-        {item.title}
-      </Text>
-      <Text style={styles.tileBenefit} numberOfLines={2}>
-        {item.benefit}
-      </Text>
+      {/* Content */}
+      <View style={styles.cardContent}>
+        <Text style={styles.cardTitle} numberOfLines={1}>
+          {program.title}
+        </Text>
+        {program.sanskritTitle && (
+          <Text style={styles.cardSanskrit} numberOfLines={1}>
+            {program.sanskritTitle}
+          </Text>
+        )}
+        <Text style={styles.cardSubtitle} numberOfLines={2}>
+          {program.subtitle}
+        </Text>
 
-      <View style={styles.metaRow}>
-        <Text style={styles.tileMeta}>{item.durationMin} min</Text>
-        <View style={styles.dotsRow}>
-          {[1, 2, 3].map((i) => (
-            <View
-              key={i}
-              style={[
-                styles.dot,
-                intensityDots(item.intensity) >= i && styles.dotActive,
-              ]}
-            />
-          ))}
+        {/* Meta Row */}
+        <View style={styles.cardMeta}>
+          <View style={styles.metaItem}>
+            <Ionicons name="calendar-outline" size={14} color="#6B7280" />
+            <Text style={styles.metaText}>{program.totalDays} days</Text>
+          </View>
+          <View style={styles.metaDot} />
+          <View style={styles.metaItem}>
+            <Ionicons name="time-outline" size={14} color="#6B7280" />
+            <Text style={styles.metaText}>~{program.avgDailyMinutes}m</Text>
+          </View>
         </View>
       </View>
     </TouchableOpacity>
@@ -253,9 +252,9 @@ function VideoTile({ item }: { item: LibraryItem }) {
 ========================================================= */
 
 const SCREEN_W = Dimensions.get("window").width;
-const GAP = 12;
 const PADDING = 18;
-const TILE_W = (SCREEN_W - PADDING * 2 - GAP) / 2;
+const GAP = 12;
+const CARD_W = (SCREEN_W - PADDING * 2 - GAP) / 2;
 
 const styles = StyleSheet.create({
   safe: { flex: 1, backgroundColor: "#FFFFFF" },
@@ -278,86 +277,200 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     marginRight: 12,
   },
-  title: { fontSize: 18, fontWeight: "900", color: "#111827" },
-  subtitle: { fontSize: 12, color: "#6B7280", marginTop: 4 },
+  title: {
+    fontSize: 18,
+    fontWeight: "900",
+    color: "#111827",
+  },
+  subtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    marginTop: 4,
+  },
 
-  goalsWrap: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    gap: 10,
+  searchWrap: {
     paddingHorizontal: 18,
+    paddingTop: 8,
     paddingBottom: 10,
   },
+  searchBox: {
+    flexDirection: "row",
+    alignItems: "center",
+    backgroundColor: "#F9FAFB",
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    paddingVertical: 10,
+    gap: 10,
+  },
+  searchInput: {
+    flex: 1,
+    fontSize: 15,
+    color: "#111827",
+    fontWeight: "600",
+    padding: 0,
+  },
+
+  goalsWrap: {
+    paddingBottom: 12,
+  },
+  goalsContent: {
+    paddingHorizontal: 18,
+    gap: 10,
+  },
   goalChip: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 14,
     paddingVertical: 8,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: "#EEF2F7",
+    borderColor: "#E5E7EB",
     backgroundColor: "#FFFFFF",
   },
   goalChipActive: {
     backgroundColor: "#EAF6F0",
     borderColor: "#BFDCCF",
   },
-  goalText: { fontSize: 12, fontWeight: "800", color: "#6B7280" },
-  goalTextActive: { color: "#1F6F57" },
-
-  grid: { paddingHorizontal: 18, paddingBottom: 40 },
-  tile: { width: TILE_W, marginBottom: 14 },
-
-  thumb: {
-    height: 112,
-    borderRadius: 18,
-    overflow: "hidden",
-    backgroundColor: "#EEE",
+  goalText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#6B7280",
   },
-  image: { width: "100%", height: "100%" },
-  playBtn: {
-    position: "absolute",
-    right: 10,
-    bottom: 10,
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+  goalTextActive: {
+    color: "#1F6F57",
+  },
+
+  grid: {
+    paddingHorizontal: 18,
+    paddingBottom: 40,
+  },
+  columnWrapper: {
+    gap: 12,
+    marginBottom: 12,
+  },
+
+  card: {
+    width: CARD_W,
     backgroundColor: "#FFFFFF",
-    alignItems: "center",
-    justifyContent: "center",
+    borderRadius: 18,
+    borderWidth: 1,
+    borderColor: "#E5E7EB",
+    overflow: "hidden",
+    shadowColor: "#000",
+    shadowOpacity: 0.04,
+    shadowRadius: 8,
+    shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
   },
-  proTag: {
+
+  cardThumb: {
+    width: "100%",
+    height: 120,
+    backgroundColor: "#F3F4F6",
+    position: "relative",
+  },
+  cardImage: {
+    width: "100%",
+    height: "100%",
+  },
+  badgesOverlay: {
     position: "absolute",
-    left: 10,
     top: 10,
+    left: 10,
+    flexDirection: "row",
+    gap: 6,
+  },
+  levelBadge: {
     paddingHorizontal: 8,
     paddingVertical: 4,
     borderRadius: 999,
-    backgroundColor: "rgba(17,24,39,0.82)",
+    backgroundColor: "rgba(255,255,255,0.95)",
+    borderWidth: 1,
+    borderColor: "rgba(0,0,0,0.06)",
   },
-  proText: { color: "#FFFFFF", fontSize: 11, fontWeight: "900" },
+  levelText: {
+    fontSize: 11,
+    fontWeight: "900",
+    color: "#374151",
+  },
 
-  tileTitle: { fontSize: 14, fontWeight: "900", marginTop: 8 },
-  tileBenefit: { fontSize: 12, color: "#6B7280", marginTop: 4 },
-
-  metaRow: {
-    marginTop: 6,
+  cardContent: {
+    padding: 12,
+  },
+  cardTitle: {
+    fontSize: 14,
+    fontWeight: "900",
+    color: "#111827",
+    marginBottom: 2,
+  },
+  cardSanskrit: {
+    fontSize: 11,
+    fontWeight: "600",
+    color: "#9CA3AF",
+    fontStyle: "italic",
+    marginBottom: 4,
+  },
+  cardSubtitle: {
+    fontSize: 12,
+    color: "#6B7280",
+    lineHeight: 16,
+    marginBottom: 8,
+  },
+  cardMeta: {
     flexDirection: "row",
-    justifyContent: "space-between",
     alignItems: "center",
+    marginTop: 4,
   },
-  tileMeta: { fontSize: 12, color: "#6B7280" },
-
-  dotsRow: { flexDirection: "row", gap: 4 },
-  dot: { width: 6, height: 6, borderRadius: 3, backgroundColor: "#E5E7EB" },
-  dotActive: { backgroundColor: "#1F6F57" },
+  metaItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: 4,
+  },
+  metaText: {
+    fontSize: 11,
+    color: "#6B7280",
+    fontWeight: "700",
+  },
+  metaDot: {
+    width: 3,
+    height: 3,
+    borderRadius: 1.5,
+    backgroundColor: "#D1D5DB",
+    marginHorizontal: 6,
+  },
 
   emptyWrap: {
-    marginTop: 40,
-    padding: 16,
+    marginTop: 60,
+    padding: 24,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: "#E6EFE9",
     backgroundColor: "#F7FAF8",
+    alignItems: "center",
   },
-  emptyTitle: { fontSize: 16, fontWeight: "900" },
-  emptySub: { fontSize: 13, color: "#6B7280", marginTop: 6 },
+  emptyTitle: {
+    fontSize: 16,
+    fontWeight: "900",
+    color: "#111827",
+    marginTop: 16,
+  },
+  emptySub: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 6,
+    textAlign: "center",
+    lineHeight: 18,
+  },
+  clearBtn: {
+    marginTop: 16,
+    paddingHorizontal: 20,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: "#2E6B4F",
+  },
+  clearBtnText: {
+    fontSize: 13,
+    fontWeight: "800",
+    color: "#FFFFFF",
+  },
 });

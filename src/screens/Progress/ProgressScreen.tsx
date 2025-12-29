@@ -37,6 +37,7 @@ type Milestone = {
 const { width } = Dimensions.get("window");
 
 export default function ProgressScreen() {
+  
   const [tab, setTab] = useState<RangeTab>("Week");
 
   // ----------------------------
@@ -211,9 +212,9 @@ export default function ProgressScreen() {
 
   const renderIntro = () => (
     <View style={styles.introWrap}>
-      <Text style={styles.introTitle}>Your Progress</Text>
+      <Text style={styles.introTitle}>Your Yoga Abhyāsa</Text>
       <Text style={styles.introSubtitle}>
-        Celebrating every step of your journey ✨
+        Consistency and discipline, practiced with gentleness
       </Text>
     </View>
   );
@@ -314,6 +315,7 @@ export default function ProgressScreen() {
             </View>
             <Text style={styles.cardTitle}>{title}</Text>
           </View>
+          
 
           <View style={styles.cardHeaderRight}>
             <Text style={styles.cardMetaStrong}>
@@ -404,7 +406,7 @@ export default function ProgressScreen() {
   const renderMonthlyBreakdown = () => (
     <View style={styles.card}>
       <View style={styles.sectionHeader}>
-        <Text style={styles.sectionTitle}>Monthly Breakdown</Text>
+        <Text style={styles.sectionTitle}>Steady Repetition</Text>
         <Text style={styles.sectionMeta}>Weeks</Text>
       </View>
 
@@ -452,7 +454,7 @@ export default function ProgressScreen() {
           <Text style={styles.sectionTitle}>Milestones</Text>
         </View>
 
-        <Text style={styles.sectionMeta}>Small wins add up</Text>
+        <Text style={styles.sectionMeta}>Honoring your practice</Text>
       </View>
 
       {items.map((m, idx) => {

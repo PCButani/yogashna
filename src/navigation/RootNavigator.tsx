@@ -13,6 +13,7 @@ import AboutYouScreen from "../screens/SignupOnboarding/AboutYouScreen";
 import TodayScreen from "../screens/Dashboard/TodayScreen";
 import MainTabsNavigator from "./MainTabsNavigator";
 import WellnessGoalsScreen from "../screens/Library/WellnessGoalsScreen";
+import ProgramDetailScreen from "../screens/Library/ProgramDetailScreen";
 import CommonPlayerScreen from "../screens/Player/CommonPlayerScreen";
 import { RootStackParamList } from "../types/navigation";
 import { Routes } from "../constants/routes";
@@ -35,6 +36,7 @@ export default function RootNavigator() {
           <Stack.Screen name={Routes.PLAN_SUMMARY} component={PlanSummaryScreen} />
           <Stack.Screen name={Routes.TODAY} component={TodayScreen} />
           <Stack.Screen name={Routes.WELLNESS_GOALS} component={WellnessGoalsScreen} />
+          <Stack.Screen name={Routes.PROGRAM_DETAIL} component={ProgramDetailScreen} />
           <Stack.Screen name={Routes.COMMON_PLAYER} component={CommonPlayerScreen} />
           <Stack.Screen name={Routes.MAIN_TABS} component={MainTabsNavigator} />
         </Stack.Navigator>
