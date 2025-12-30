@@ -6,9 +6,9 @@ import {
   Pressable,
   TouchableOpacity,
   ActivityIndicator,
-  Platform,
   useWindowDimensions,
   StatusBar,
+  Platform,
 } from "react-native";
 import { useSafeAreaInsets } from "react-native-safe-area-context";
 // Requires: npx expo install expo-screen-orientation
@@ -97,9 +97,9 @@ export default function CommonPlayerScreen() {
 
   // Fullscreen state (controls orientation lock)
   const [isFullscreen, setIsFullscreen] = useState(false);
+  const [surfaceKey, setSurfaceKey] = useState(0);
 
   // UI state
-  const [showHeader, setShowHeader] = useState(true);
   const [showControls, setShowControls] = useState(false);
   const [isReady, setIsReady] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -297,7 +297,6 @@ export default function CommonPlayerScreen() {
   }, []);
 
   const onToggleHeader = useCallback(() => {
-    setShowHeader((s) => !s);
     setShowControls((s) => !s);
   }, []);
 
@@ -326,11 +325,51 @@ export default function CommonPlayerScreen() {
         StatusBar.setHidden(false, "fade");
         await ScreenOrientation.unlockAsync();
       }
+
+      if (Platform.OS === "android") {
+        // Android-only fix: reload surface after orientation lock to avoid black screen.
+        const currentPos = Number(player?.currentTime ?? 0);
+        try {
+          player?.pause();
+        } catch {
+          // ignore
+        }
+
+        if (typeof (player as any).replaceAsync === "function") {
+          await (player as any).replaceAsync(videoUri);
+        } else {
+          (player as any).replace?.(videoUri);
+        }
+
+        try {
+          player.currentTime = currentPos;
+        } catch {
+          // ignore
+        }
+
+        setSurfaceKey((k) => k + 1);
+
+        try {
+          if (!isLocked) {
+            player?.play();
+          }
+        } catch {
+          // ignore
+        }
+      } else {
+        try {
+          if (!isLocked) {
+            player?.play();
+          }
+        } catch {
+          // ignore
+        }
+      }
     } catch (e) {
       // Fallback: at least hide/show status bar
       StatusBar.setHidden(next, "fade");
     }
-  }, [isFullscreen]);
+  }, [isFullscreen, player, isLocked, videoUri]);
 
   useEffect(() => {
     return () => {
@@ -477,6 +516,9 @@ export default function CommonPlayerScreen() {
   const reservedBottomSpace =
     isPlaylist && showControls ? insets.bottom + CONTROLS_ROW_HEIGHT + CONTROLS_GAP : 0;
 
+  // In fullscreen/landscape, do NOT apply bottom padding
+  const containerPadding = shouldFillScreen ? 0 : reservedBottomSpace;
+
   // Simple MM:SS formatter
   const fmt = (s: number) => {
     if (!Number.isFinite(s) || s < 0) return "00:00";
@@ -487,7 +529,13 @@ export default function CommonPlayerScreen() {
     return `${mm}:${ss}`;
   };
 
-  const showFullscreenButton = showHeader && hasValidSource && !loadError;
+  // Android-only fix: explicit dimensions in fullscreen to prevent black screen
+  const androidFullscreenFix =
+    Platform.OS === "android" && shouldFillScreen
+      ? { width, height }
+      : null;
+
+  const showFullscreenButton = hasValidSource && !loadError;
 
   return (
     <View style={styles.safe}>
@@ -497,16 +545,24 @@ export default function CommonPlayerScreen() {
           <View
             style={[
               styles.videoContainer,
-              { paddingBottom: reservedBottomSpace },
+              { paddingBottom: containerPadding },
               !shouldFillScreen && styles.videoContainerLetterbox,
             ]}
           >
             {/* 16:9 wrapper in portrait device (unless fullscreen) */}
-            <View style={[styles.videoFrame, !shouldFillScreen && styles.videoFrame16x9]}>
+            <View
+              style={[
+                styles.videoFrame,
+                !shouldFillScreen && styles.videoFrame16x9,
+                androidFullscreenFix,
+              ]}
+            >
               <VideoView
-                // IMPORTANT: do NOT key on orientation; it causes remount + button flicker
-                key={`${currentIndex}`}
-                style={styles.video}
+                // Remount on fullscreen/orientation change, include dimensions for Android fix
+                key={`${currentIndex}-${surfaceKey}-${isFullscreen ? "fs" : "nf"}-${
+                  isLandscapeDevice ? "land" : "port"
+                }-${width}x${height}`}
+                style={[styles.video, androidFullscreenFix]}
                 player={player}
                 nativeControls={!isLocked} // keep scrubber available even in fullscreen
                 requiresLinearPlayback={false}
@@ -526,7 +582,13 @@ export default function CommonPlayerScreen() {
 
             {/* Minimal timer overlay (MVP) - does not block touches */}
             {!loadError && hasValidSource && (
-              <View style={styles.timerOverlay} pointerEvents="none">
+              <View
+                style={[
+                  styles.timerOverlay,
+                  { top: insets.top + 70 }
+                ]}
+                pointerEvents="none"
+              >
                 <Text style={styles.timerText}>
                   {fmt(positionSec)} / {fmt(durationSec)}
                 </Text>
@@ -637,15 +699,14 @@ export default function CommonPlayerScreen() {
               </View>
 
               <View style={styles.headerRight}>
-                {showFullscreenButton && showControls && (
+                {showFullscreenButton && (
                   <TouchableOpacity
                     onPress={handleToggleFullscreen}
                     style={styles.fullscreenBtn}
                     hitSlop={10}
-                    disabled={!hasValidSource || loadError}
                   >
                     <Ionicons
-                      name={isFullscreen ? "contract" : "expand"}
+                      name={isFullscreen ? "contract-outline" : "expand-outline"}
                       size={20}
                       color="#FFFFFF"
                     />
@@ -731,6 +792,7 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: "#000000",
     justifyContent: "center",
+    position: "relative",
   },
   // Letterbox container in portrait device (centers the 16:9 frame)
   videoContainerLetterbox: {
@@ -739,15 +801,15 @@ const styles = StyleSheet.create({
   },
   // Frame wrapper
   videoFrame: {
-    width: "100%",
-    height: "100%",
+    flex: 1,
     backgroundColor: "#000000",
+    overflow: "hidden",
   },
   // 16:9 landscape frame when NOT fullscreen and device is portrait
   videoFrame16x9: {
+    flex: undefined,
     width: "100%",
     aspectRatio: 16 / 9,
-    height: undefined,
   },
   video: {
     flex: 1,
@@ -759,23 +821,29 @@ const styles = StyleSheet.create({
     position: "absolute",
     left: 14,
     right: 14,
-    bottom: 14,
     gap: 8,
+    alignItems: "center",
   },
   timerText: {
-    color: "rgba(255,255,255,0.9)",
-    fontSize: 12,
+    color: "rgba(255,255,255,0.95)",
+    fontSize: 11,
     fontWeight: "700",
+    backgroundColor: "rgba(0,0,0,0.6)",
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 6,
+    overflow: "hidden",
   },
   timerBarTrack: {
-    height: 3,
+    height: 2,
     borderRadius: 999,
-    backgroundColor: "rgba(255,255,255,0.25)",
+    backgroundColor: "rgba(255,255,255,0.3)",
     overflow: "hidden",
+    maxWidth: 200,
   },
   timerBarFill: {
     height: "100%",
-    backgroundColor: "#2E6B4F",
+    backgroundColor: "#5B8C6A",
   },
 
   header: {
