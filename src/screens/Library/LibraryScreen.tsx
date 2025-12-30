@@ -21,6 +21,7 @@ import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { RootStackParamList, MainTabParamList, WellnessCategory } from "../../types/navigation";
 import { Routes } from "../../constants/routes";
 import ResumeBadge from "../../components/ResumeBadge";
+import { useFavoritesStore } from "../../store/useFavoritesStore";
 
 
 
@@ -261,15 +262,9 @@ export default function LibraryScreen() {
   const navigation = useNavigation<LibraryScreenNavigationProp>();
 
   const [query, setQuery] = useState("");
-  const [favorites, setFavorites] = useState<Record<string, boolean>>(() => {
-    const seed: Record<string, boolean> = {};
-    ALL_LIBRARY_ITEMS.forEach((x) => (seed[x.id] = !!x.isFavorite));
-    return seed;
-  });
 
-  const toggleFav = (id: string) => {
-    setFavorites((prev) => ({ ...prev, [id]: !prev[id] }));
-  };
+  // ✅ FIXED: Use global favorites store instead of local state
+  const { isFavorite, toggleFavorite } = useFavoritesStore();
 
   const filteredByQuery = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -381,8 +376,8 @@ export default function LibraryScreen() {
                   renderItem={({ item }) => (
                     <ProgramInfoCard
                       item={item}
-                      isFavorite={!!favorites[item.id]}
-                      onToggleFavorite={() => toggleFav(item.id)}
+                      isFavorite={isFavorite(item.programId)}
+                      onToggleFavorite={() => toggleFavorite(item.programId)}
                       onPress={() => handleProgramPress(item.programId)}
                     />
                   )}

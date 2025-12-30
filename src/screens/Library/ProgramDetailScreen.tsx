@@ -14,6 +14,7 @@ import { getProgramTemplateById } from "../../data/sources/ProgramTemplates";
 import { getProgramScheduleById, type ScheduleDay, type ScheduleSession } from "../../data/sources/ProgramTemplateSchedules";
 import { Routes } from "../../constants/routes";
 import { useFavoritesStore } from "../../store/useFavoritesStore";
+import { useProgressStore } from "../../store/useProgressStore";
 import ContraindicationsModal from "../../components/safety/ContraindicationsModal";
 import { hasSafetyAcknowledgment, saveSafetyAcknowledgment } from "../../utils/safetyAck";
 
@@ -23,8 +24,9 @@ export default function ProgramDetailScreen() {
 
   const programId = route.params?.programId;
 
-  // Favorites store
+  // ✅ Global stores
   const { isFavorite, toggleFavorite } = useFavoritesStore();
+  const isSessionCompleted = useProgressStore((state) => state.isSessionCompleted);
 
   // Modal state
   const [showSafetyModal, setShowSafetyModal] = useState(false);
@@ -34,10 +36,28 @@ export default function ProgramDetailScreen() {
   const programTemplate = getProgramTemplateById(programId);
   const schedule = getProgramScheduleById(programId);
 
+  // ✅ FIXED: Calculate actual completed days from progress store
   const completedDaysCount = useMemo(() => {
     if (!schedule) return 0;
-    return schedule.days.filter((d) => d.state === "completed").length;
-  }, [schedule]);
+
+    let count = 0;
+    schedule.days.forEach((day) => {
+      // Check if ALL sessions in this day are completed
+      const allSessionsCompleted = day.sessions.every((session) =>
+        isSessionCompleted({
+          programId,
+          dayId: day.dayNumber.toString(),
+          videoId: session.id,
+        })
+      );
+
+      if (allSessionsCompleted) {
+        count++;
+      }
+    });
+
+    return count;
+  }, [schedule, programId, isSessionCompleted]);
 
   const currentDay = useMemo(() => {
     if (!schedule) return null;
@@ -308,6 +328,8 @@ export default function ProgramDetailScreen() {
               <DayCard
                 key={day.dayNumber}
                 day={day}
+                programId={programId}
+                isSessionCompleted={isSessionCompleted}
                 onPlayDay={() => handlePlayDay(day)}
                 onPlaySession={(sessionIndex) => handlePlaySession(day, sessionIndex)}
               />
@@ -336,20 +358,37 @@ export default function ProgramDetailScreen() {
 
 function DayCard({
   day,
+  programId,
+  isSessionCompleted,
   onPlayDay,
   onPlaySession,
 }: {
   day: ScheduleDay;
+  programId: string;
+  isSessionCompleted: (sessionId: { programId?: string; dayId?: string; videoId: string }) => boolean;
   onPlayDay: () => void;
   onPlaySession: (sessionIndex: number) => void;
 }) {
   const { dayNumber, state, sessions } = day;
 
+  // ✅ FIXED: Calculate real completion status from progress store
+  const completedSessionsCount = useMemo(() => {
+    return sessions.filter((session) =>
+      isSessionCompleted({
+        programId,
+        dayId: dayNumber.toString(),
+        videoId: session.id,
+      })
+    ).length;
+  }, [sessions, programId, dayNumber, isSessionCompleted]);
+
+  const isFullyCompleted = completedSessionsCount === sessions.length;
+  const isPartiallyCompleted = completedSessionsCount > 0 && !isFullyCompleted;
+
   const isLocked = state === "locked";
   const isCurrent = state === "current";
-  const isCompleted = state === "completed";
 
-  const canPlay = isCurrent || isCompleted;
+  const canPlay = isCurrent || isFullyCompleted || isPartiallyCompleted;
 
   const totalDuration = sessions.reduce((sum, s) => sum + s.durationMin, 0);
 
@@ -359,9 +398,17 @@ function DayCard({
       <View style={styles.dayHeader}>
         <View style={styles.dayHeaderLeft}>
           <Ionicons
-            name={isCompleted ? "checkmark-circle" : isCurrent ? "arrow-forward-circle" : "lock-closed"}
+            name={
+              isFullyCompleted
+                ? "checkmark-circle"
+                : isPartiallyCompleted
+                ? "checkmark-circle-outline"
+                : isCurrent
+                ? "arrow-forward-circle"
+                : "lock-closed"
+            }
             size={24}
-            color={isLocked ? "#9CA3AF" : isCurrent ? "#2E6B4F" : "#2E6B4F"}
+            color={isLocked ? "#9CA3AF" : isCurrent || isPartiallyCompleted ? "#2E6B4F" : "#2E6B4F"}
           />
           <View style={styles.dayHeaderText}>
             <Text style={styles.dayNumber}>Day {dayNumber}</Text>
@@ -370,44 +417,68 @@ function DayCard({
         </View>
 
         {/* Status Pill */}
-        <View style={[
-          styles.statusPill,
-          isCompleted && styles.statusPillCompleted,
-          isCurrent && styles.statusPillCurrent,
-          isLocked && styles.statusPillLocked,
-        ]}>
+        <View
+          style={[
+            styles.statusPill,
+            isFullyCompleted && styles.statusPillCompleted,
+            isPartiallyCompleted && styles.statusPillPartial,
+            isCurrent && !isPartiallyCompleted && styles.statusPillCurrent,
+            isLocked && styles.statusPillLocked,
+          ]}
+        >
           <Text style={styles.statusPillText}>
-            {isCompleted ? "Completed" : isCurrent ? "Up Next" : "Locked"}
+            {isFullyCompleted
+              ? "Completed"
+              : isPartiallyCompleted
+              ? `${completedSessionsCount} / ${sessions.length} completed`
+              : isCurrent
+              ? "Up Next"
+              : "Locked"}
           </Text>
         </View>
       </View>
 
       {/* Session List */}
       <View style={styles.sessionsWrap}>
-        {sessions.map((session, idx) => (
-          <TouchableOpacity
-            key={session.id}
-            style={styles.sessionTile}
-            onPress={() => onPlaySession(idx)}
-            disabled={isLocked}
-            activeOpacity={0.7}
-          >
-            <View style={styles.sessionIcon}>
-              <Ionicons name="play-circle-outline" size={20} color={isLocked ? "#D1D5DB" : "#2E6B4F"} />
-            </View>
-            <View style={styles.sessionInfo}>
-              <Text style={[styles.sessionTitle, isLocked && styles.sessionTitleLocked]} numberOfLines={1}>
-                {session.title}
-              </Text>
-              <View style={styles.sessionMeta}>
-                <Text style={styles.sessionMetaText}>{session.durationMin} min</Text>
-                <View style={styles.sessionDot} />
-                <Text style={styles.sessionMetaText}>{session.style}</Text>
+        {sessions.map((session, idx) => {
+          const sessionCompleted = isSessionCompleted({
+            programId,
+            dayId: dayNumber.toString(),
+            videoId: session.id,
+          });
+
+          return (
+            <TouchableOpacity
+              key={session.id}
+              style={[
+                styles.sessionTile,
+                sessionCompleted && styles.sessionTileCompleted,
+              ]}
+              onPress={() => onPlaySession(idx)}
+              disabled={isLocked}
+              activeOpacity={0.7}
+            >
+              <View style={styles.sessionIcon}>
+                <Ionicons
+                  name={sessionCompleted ? "checkmark-circle" : "play-circle-outline"}
+                  size={20}
+                  color={isLocked ? "#D1D5DB" : sessionCompleted ? "#2E6B4F" : "#2E6B4F"}
+                />
               </View>
-            </View>
-            <Ionicons name="chevron-forward" size={18} color={isLocked ? "#D1D5DB" : "#9CA3AF"} />
-          </TouchableOpacity>
-        ))}
+              <View style={styles.sessionInfo}>
+                <Text style={[styles.sessionTitle, isLocked && styles.sessionTitleLocked]} numberOfLines={1}>
+                  {session.title}
+                </Text>
+                <View style={styles.sessionMeta}>
+                  <Text style={styles.sessionMetaText}>{session.durationMin} min</Text>
+                  <View style={styles.sessionDot} />
+                  <Text style={styles.sessionMetaText}>{session.style}</Text>
+                </View>
+              </View>
+              <Ionicons name="chevron-forward" size={18} color={isLocked ? "#D1D5DB" : "#9CA3AF"} />
+            </TouchableOpacity>
+          );
+        })}
       </View>
 
       {/* Play Day Button */}
@@ -616,31 +687,6 @@ const styles = StyleSheet.create({
     fontWeight: "500",
   },
 
-  disclaimerBox: {
-    backgroundColor: "#FFF7ED",
-    borderWidth: 1,
-    borderColor: "#FED7AA",
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 16,
-  },
-  disclaimerHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: 8,
-    marginBottom: 8,
-  },
-  disclaimerTitle: {
-    fontSize: 14,
-    fontWeight: "800",
-    color: "#D97706",
-  },
-  disclaimerText: {
-    fontSize: 13,
-    color: "#92400E",
-    lineHeight: 18,
-  },
-
   contraindicationsBox: {
     backgroundColor: "#FEF2F2",
     borderWidth: 1,
@@ -756,6 +802,10 @@ const styles = StyleSheet.create({
     backgroundColor: "#E7F6EC",
     borderColor: "#BFE7CC",
   },
+  statusPillPartial: {
+    backgroundColor: "#F0F9F5",
+    borderColor: "#C6E7D3",
+  },
   statusPillCurrent: {
     backgroundColor: "#FFF3E6",
     borderColor: "#F3D3B5",
@@ -782,6 +832,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderWidth: 1,
     borderColor: "#E5E7EB",
+  },
+  sessionTileCompleted: {
+    backgroundColor: "#F0F9F5",
+    borderColor: "#C6E7D3",
   },
   sessionIcon: {
     marginRight: 10,

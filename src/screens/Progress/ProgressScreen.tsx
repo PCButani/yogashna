@@ -1,5 +1,5 @@
 // ProgressScreen.tsx
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -10,13 +10,10 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import { useFocusEffect } from "@react-navigation/native";
+import { useProgressStore } from "../../store/useProgressStore";
 import {
-  getProgressData,
-  getWeeklyActivity,
   getWeekDayLabel,
   getWeeklySessionsTarget,
-  type ProgressData,
   type DailyActivity,
 } from "../../services/ProgressTracking";
 
@@ -48,28 +45,10 @@ const { width } = Dimensions.get("window");
 export default function ProgressScreen() {
 
   const [tab, setTab] = useState<RangeTab>("Week");
-  const [progressData, setProgressData] = useState<ProgressData | null>(null);
-  const [weeklyData, setWeeklyData] = useState<DailyActivity[]>([]);
 
-  // Load progress data when screen focuses
-  useFocusEffect(
-    React.useCallback(() => {
-      loadProgressData();
-    }, [])
-  );
-
-  const loadProgressData = async () => {
-    try {
-      const [progress, weekly] = await Promise.all([
-        getProgressData(),
-        getWeeklyActivity(),
-      ]);
-      setProgressData(progress);
-      setWeeklyData(weekly);
-    } catch (error) {
-      console.error("Failed to load progress data:", error);
-    }
-  };
+  // ✅ Use progress store for instant updates
+  const progressData = useProgressStore((state) => state.progressData);
+  const weeklyData = useProgressStore((state) => state.weeklyActivity);
 
   // Calculate streak data from real progress
   const streak = useMemo(() => {

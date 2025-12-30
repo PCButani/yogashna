@@ -17,7 +17,7 @@ import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useVideoPlayer, VideoView } from "expo-video";
-import { recordPracticeSession } from "../../services/ProgressTracking";
+import { useProgressStore } from "../../store/useProgressStore";
 import EndSessionCheckinModal from "../../components/player/EndSessionCheckinModal";
 import { Routes } from "../../constants/routes";
 
@@ -47,6 +47,9 @@ export default function CommonPlayerScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
   const insets = useSafeAreaInsets();
+
+  // ✅ Use progress store for instant updates
+  const markSessionCompleted = useProgressStore((state) => state.markSessionCompleted);
 
   const params = (route?.params ?? {}) as RouteParams;
 
@@ -427,15 +430,26 @@ export default function CommonPlayerScreen() {
     const sessionDuration =
       currentSession?.durationMin || Math.round((player?.duration ?? 0) / 60);
 
-    void recordPracticeSession(sessionDuration, 1).catch((err) => {
+    // ✅ Use progress store instead of direct service call
+    void markSessionCompleted({
+      sessionId: {
+        programId: params.context?.programId,
+        dayId: params.context?.dayNumber?.toString(),
+        videoId: currentSession?.id || `session-${currentIndex}`,
+      },
+      durationMin: sessionDuration,
+    }).catch((err: Error) => {
       console.error("Failed to record session:", err);
     });
-  }, [currentIndex, currentSession, player]);
+  }, [currentIndex, currentSession, player, markSessionCompleted, params.context]);
 
   const handlePlaybackEnded = useCallback(() => {
     if (!isMountedRef.current) return;
 
     recordSessionCompletion();
+
+    // Clear resume position on completion
+    AsyncStorage.removeItem(resumeStorageKey).catch(() => {});
 
     if (isPlaylist && !isLastVideo) {
       if (autoAdvanceTimerRef.current) {
@@ -459,7 +473,7 @@ export default function CommonPlayerScreen() {
         }
       }, 800);
     }
-  }, [isLastVideo, isPlaylist, recordSessionCompletion]);
+  }, [isLastVideo, isPlaylist, recordSessionCompletion, resumeStorageKey]);
 
   // Subscribe to player events: time updates + play-to-end
   useEffect(() => {

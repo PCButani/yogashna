@@ -27,6 +27,7 @@ import {
 } from "../../services/PracticePreferences";
 import { generateTodaysAbhyasa } from "../../services/AbhyasaGenerator";
 import { Routes } from "../../constants/routes";
+import { useProgressStore } from "../../store/useProgressStore";
 
 const { width } = Dimensions.get("window");
 
@@ -58,6 +59,10 @@ export default function TodayScreen() {
   // State for user preferences and today's practice
   const [preferences, setPreferences] = useState<PracticePreferences | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+
+  // Get today's practice minutes from progress store
+  const today = new Date().toISOString().split('T')[0];
+  const todayMinutes = useProgressStore((state) => state.getDailyMinutes(today));
 
   // Load user preferences on mount and when screen is focused
   useFocusEffect(
@@ -175,9 +180,15 @@ export default function TodayScreen() {
                 Personalized for {preferences?.focus || "your goals"}
               </Text>
             </View>
-            <TouchableOpacity onPress={handleViewProgram} activeOpacity={0.7}>
-              <Text style={styles.viewPlanLink}>View Plan</Text>
-            </TouchableOpacity>
+            {todayMinutes > 0 ? (
+              <View style={styles.completionBadge}>
+                <Text style={styles.completionBadgeText}>✅ Practiced today</Text>
+              </View>
+            ) : (
+              <TouchableOpacity onPress={handleViewProgram} activeOpacity={0.7}>
+                <Text style={styles.viewPlanLink}>View Plan</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Hero Image with Overlay Tags */}
@@ -513,6 +524,21 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: "700",
     color: "#16A34A",
+  },
+
+  completionBadge: {
+    backgroundColor: "#F0F9F5",
+    borderWidth: 1,
+    borderColor: "#C6E7D3",
+    paddingHorizontal: 10,
+    paddingVertical: 5,
+    borderRadius: 12,
+  },
+
+  completionBadgeText: {
+    fontSize: 11,
+    fontWeight: "700",
+    color: "#2E6B4F",
   },
 
   heroImageContainer: { height: 180, borderRadius: 18, overflow: "hidden", marginBottom: 14 },

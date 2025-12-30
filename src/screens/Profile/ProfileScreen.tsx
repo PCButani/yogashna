@@ -12,6 +12,7 @@ import { useNavigation } from "@react-navigation/native";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList } from "../../types/navigation";
 import { Routes } from "../../constants/routes";
+import { useFavoritesStore } from "../../store/useFavoritesStore";
 
 /**
  * ProfileScreen (Final Locked - TS/Expo Safe)
@@ -31,6 +32,9 @@ type ProfileScreenNavigationProp = NativeStackNavigationProp<
 
 export default function ProfileScreen() {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
+
+  // ✅ FIXED: Use global favorites store
+  const favoritesCount = useFavoritesStore((state) => state.getFavoritesCount());
 
   // ---- Mock user data (replace with store/API later) ----
   const user = useMemo(
@@ -107,11 +111,11 @@ export default function ProfileScreen() {
       {
         iconName: "heart-outline" as IconName,
         iconColor: "#EF4444",
-        value: "12",
+        value: String(favoritesCount),
         label: "Favorites",
       },
     ],
-    [stats.sessions, stats.totalTimeHours, stats.streakDays]
+    [stats.sessions, stats.totalTimeHours, stats.streakDays, favoritesCount]
   );
 
   const personalInfo = useMemo(
