@@ -13,8 +13,8 @@ import {
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Routes } from "../../constants/routes";
-import { mockPrograms } from "../../data/mock/programs";
-import { Program } from "../../data/mock/models";
+import { getAllProgramTemplates, type ProgramTemplate } from "../../data/sources/ProgramTemplates";
+import { getProgramScheduleById } from "../../data/sources/ProgramTemplateSchedules";
 
 /* =========================================================
    TYPES
@@ -26,6 +26,11 @@ type WellnessCategory =
   | "Fitness & Flexibility"
   | "Beginners & Mindfulness"
   | "Office Yoga";
+
+type ProgramWithSchedule = ProgramTemplate & {
+  totalDays: number;
+  avgDailyMinutes: number;
+};
 
 /* =========================================================
    SCREEN
@@ -41,17 +46,30 @@ export default function WellnessGoalsScreen() {
   const [searchText, setSearchText] = useState("");
   const [activeGoal, setActiveGoal] = useState<string>("All");
 
+  // Combine ProgramTemplate with Schedule data
+  const allPrograms = useMemo(() => {
+    const templates = getAllProgramTemplates();
+    return templates.map((template): ProgramWithSchedule => {
+      const schedule = getProgramScheduleById(template.id);
+      return {
+        ...template,
+        totalDays: schedule?.totalDays || template.defaultDays,
+        avgDailyMinutes: schedule?.avgDailyMinutes || template.defaultMinutesPerDay,
+      };
+    });
+  }, []);
+
   // Filter programs by wellness category
   const categoryPrograms = useMemo(() => {
-    return mockPrograms.filter((p) => p.category === wellnessCategory);
-  }, [wellnessCategory]);
+    return allPrograms.filter((p) => p.category === wellnessCategory);
+  }, [allPrograms, wellnessCategory]);
 
   // Extract unique goals from filtered programs
   const availableGoals = useMemo(() => {
     const goals = new Set<string>();
     categoryPrograms.forEach((p) => {
       if (p.tags && p.tags.length > 0) {
-        p.tags.forEach((tag) => goals.add(tag));
+        p.tags.forEach((tag: string) => goals.add(tag));
       }
     });
     return ["All", ...Array.from(goals)];
@@ -85,7 +103,7 @@ export default function WellnessGoalsScreen() {
     setActiveGoal("All");
   };
 
-  const handleProgramPress = (program: Program) => {
+  const handleProgramPress = (program: ProgramWithSchedule) => {
     navigation.navigate(Routes.PROGRAM_DETAIL, { programId: program.id });
   };
 
@@ -196,7 +214,7 @@ function ProgramCard({
   program,
   onPress,
 }: {
-  program: Program;
+  program: ProgramWithSchedule;
   onPress: () => void;
 }) {
   return (
@@ -204,14 +222,14 @@ function ProgramCard({
       {/* Thumbnail */}
       <View style={styles.cardThumb}>
         <Image
-          source={{ uri: program.bannerImage }}
+          source={{ uri: program.heroImage }}
           style={styles.cardImage}
         />
 
         {/* Badges Overlay */}
         <View style={styles.badgesOverlay}>
           <View style={styles.levelBadge}>
-            <Text style={styles.levelText}>{program.level}</Text>
+            <Text style={styles.levelText}>{program.levelLabel}</Text>
           </View>
         </View>
       </View>

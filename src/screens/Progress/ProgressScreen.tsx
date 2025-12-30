@@ -1,5 +1,5 @@
 // ProgressScreen.tsx
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -10,6 +10,15 @@ import {
   Dimensions,
 } from "react-native";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { useFocusEffect } from "@react-navigation/native";
+import {
+  getProgressData,
+  getWeeklyActivity,
+  getWeekDayLabel,
+  getWeeklySessionsTarget,
+  type ProgressData,
+  type DailyActivity,
+} from "../../services/ProgressTracking";
 
 type RangeTab = "Week" | "Month";
 
@@ -37,44 +46,95 @@ type Milestone = {
 const { width } = Dimensions.get("window");
 
 export default function ProgressScreen() {
-  
+
   const [tab, setTab] = useState<RangeTab>("Week");
+  const [progressData, setProgressData] = useState<ProgressData | null>(null);
+  const [weeklyData, setWeeklyData] = useState<DailyActivity[]>([]);
 
-  // ----------------------------
-  // Mock / placeholder data
-  // Replace with real API later
-  // ----------------------------
-  const streak = useMemo(
-    () => ({
-      current: 7,
-      best: 14,
-      message: "7 days of dedication! You're doing great",
-      tip: "Keep the streak alive with a 5–12 min session today.",
-    }),
-    []
+  // Load progress data when screen focuses
+  useFocusEffect(
+    React.useCallback(() => {
+      loadProgressData();
+    }, [])
   );
 
-  const weekGoal = useMemo(
-    () => ({
-      targetSessions: 5,
-      completedSessions: 3,
-      helperText: "2 more sessions to reach your weekly goal",
-    }),
-    []
-  );
+  const loadProgressData = async () => {
+    try {
+      const [progress, weekly] = await Promise.all([
+        getProgressData(),
+        getWeeklyActivity(),
+      ]);
+      setProgressData(progress);
+      setWeeklyData(weekly);
+    } catch (error) {
+      console.error("Failed to load progress data:", error);
+    }
+  };
 
-  const weeklyActivity = useMemo<WeeklyDay[]>(
-    () => [
-      { key: "Mon", sessions: 1, minutes: 25, done: true },
-      { key: "Tue", sessions: 0, minutes: 0, done: false },
-      { key: "Wed", sessions: 2, minutes: 45, done: true },
-      { key: "Thu", sessions: 1, minutes: 20, done: true },
-      { key: "Fri", sessions: 0, minutes: 0, done: false },
-      { key: "Sat", sessions: 0, minutes: 0, done: false },
-      { key: "Sun", sessions: 0, minutes: 0, done: false },
-    ],
-    []
-  );
+  // Calculate streak data from real progress
+  const streak = useMemo(() => {
+    if (!progressData) {
+      return {
+        current: 0,
+        best: 0,
+        message: "Start your first practice to begin your streak!",
+        tip: "Consistency is key to building a strong practice.",
+      };
+    }
+
+    const { currentStreak, longestStreak } = progressData;
+
+    let message = "";
+    if (currentStreak === 0) {
+      message = "Start your practice today to begin a new streak!";
+    } else if (currentStreak === 1) {
+      message = "Great start! Come back tomorrow to keep it going.";
+    } else if (currentStreak < 7) {
+      message = `${currentStreak} days strong! You're building a habit.`;
+    } else if (currentStreak < 30) {
+      message = `${currentStreak} days of dedication! Amazing consistency.`;
+    } else {
+      message = `${currentStreak} days! You're a yoga warrior!`;
+    }
+
+    return {
+      current: currentStreak,
+      best: longestStreak,
+      message,
+      tip: currentStreak > 0
+        ? "Keep the streak alive with a 10–20 min session today."
+        : "Even 5 minutes counts. Start small and build up.",
+    };
+  }, [progressData]);
+
+  // Calculate week goal from real data
+  const weekGoal = useMemo(() => {
+    const targetSessions = getWeeklySessionsTarget();
+    const completedSessions = weeklyData.reduce(
+      (sum, day) => sum + day.sessionsCompleted,
+      0
+    );
+    const remaining = Math.max(0, targetSessions - completedSessions);
+
+    return {
+      targetSessions,
+      completedSessions,
+      helperText:
+        remaining === 0
+          ? "Week goal achieved! Amazing work!"
+          : `${remaining} more session${remaining !== 1 ? "s" : ""} to reach your weekly goal`,
+    };
+  }, [weeklyData]);
+
+  // Transform weekly data for UI
+  const weeklyActivity = useMemo<WeeklyDay[]>(() => {
+    return weeklyData.map((day) => ({
+      key: getWeekDayLabel(day.date),
+      sessions: day.sessionsCompleted,
+      minutes: day.minutesPracticed,
+      done: day.sessionsCompleted > 0,
+    }));
+  }, [weeklyData]);
 
   const monthGoal = useMemo(
     () => ({

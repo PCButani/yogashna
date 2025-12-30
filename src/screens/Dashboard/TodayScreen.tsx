@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import {
   View,
   Text,
@@ -17,7 +17,16 @@ import {
   FontAwesome5,
 } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
-import { useSignupOnboarding } from "../../data/onboarding/SignupOnboardingContext";
+import { useNavigation, useFocusEffect } from "@react-navigation/native";
+import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import type { RootStackParamList } from "../../types/navigation";
+
+import {
+  getPracticePreferences,
+  type PracticePreferences,
+} from "../../services/PracticePreferences";
+import { generateTodaysAbhyasa } from "../../services/AbhyasaGenerator";
+import { Routes } from "../../constants/routes";
 
 const { width } = Dimensions.get("window");
 
@@ -27,9 +36,6 @@ const HERO_IMG =
 
 const CONTINUE_THUMB =
   "https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=800&q=80";
-
-const HERO_DESC =
-  "Awaken your body and mind with gentle flowing movements that honor the sunrise within you ☀️";
 
 // Cross-platform shadow
 const shadow = (elevation = 3) =>
@@ -44,10 +50,89 @@ const shadow = (elevation = 3) =>
     default: {},
   });
 
+type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
+
 export default function TodayScreen() {
-  const onboarding = useSignupOnboarding() as any;
-  const focus =
-    onboarding?.state?.wellnessFocus ?? onboarding?.wellnessFocus ?? "Wellness";
+  const navigation = useNavigation<NavigationProp>();
+
+  // State for user preferences and today's practice
+  const [preferences, setPreferences] = useState<PracticePreferences | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  // Load user preferences on mount and when screen is focused
+  useFocusEffect(
+    React.useCallback(() => {
+      loadPreferences();
+    }, [])
+  );
+
+  const loadPreferences = async () => {
+    try {
+      setIsLoading(true);
+      const prefs = await getPracticePreferences();
+      setPreferences(prefs);
+    } catch (error) {
+      console.error("Failed to load preferences:", error);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  // Handler: Play Today's Abhyāsa
+  const handlePlayTodaysAbhyasa = () => {
+    if (!preferences) return;
+
+    // Generate today's practice playlist
+    const playlist = generateTodaysAbhyasa(preferences);
+
+    // Navigate to player with playlist
+    navigation.navigate(Routes.COMMON_PLAYER, {
+      playlist,
+      startIndex: 0,
+      context: { programId: "todays-abhyasa" },
+    });
+  };
+
+  // Handler: View full 21-day program
+  const handleViewProgram = () => {
+    navigation.navigate(Routes.MY_ABHYASA_PROGRAM);
+  };
+
+  // Handler: Navigate to Video Library with filter
+  const handleQuickStart = (filter: "Yoga" | "Breathing" | "Meditation") => {
+    navigation.navigate(Routes.VIDEO_LIBRARY, { filter });
+  };
+
+  // Get greeting based on time of day
+  const getGreeting = (): string => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 18) return "Good afternoon";
+    return "Good evening";
+  };
+
+  // Get greeting icon
+  const getGreetingIcon = (): string => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "🌅";
+    if (hour < 18) return "☀️";
+    return "🌙";
+  };
+
+  // Calculate total session time from preferences
+  const getTotalMinutes = (): number => {
+    if (!preferences) return 20;
+    switch (preferences.length) {
+      case "Quick":
+        return 10;
+      case "Balanced":
+        return 20;
+      case "Deep":
+        return 30;
+      default:
+        return 20;
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -60,9 +145,11 @@ export default function TodayScreen() {
         {/* 1. HEADER */}
         <View style={styles.header}>
           <View>
-            <Text style={styles.greeting}>Good evening, there 🌙</Text>
+            <Text style={styles.greeting}>
+              {getGreeting()} {getGreetingIcon()}
+            </Text>
             <Text style={styles.subGreeting}>
-              Today's Abhyāsa is ready
+              Your Abhyāsa is ready
             </Text>
           </View>
 
@@ -76,7 +163,7 @@ export default function TodayScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 2. HERO CARD (with missing description added + title overlay like design) */}
+        {/* 2. TODAY'S PRACTICE HERO CARD */}
         <View style={styles.heroCard}>
           <View style={styles.cardHeader}>
             <View style={styles.iconCircle}>
@@ -85,37 +172,53 @@ export default function TodayScreen() {
             <View style={{ flex: 1 }}>
               <Text style={styles.cardTag}>Today's Abhyāsa</Text>
               <Text style={styles.cardRecText}>
-                A practice designed for your body and goals
+                Personalized for {preferences?.focus || "your goals"}
               </Text>
             </View>
+            <TouchableOpacity onPress={handleViewProgram} activeOpacity={0.7}>
+              <Text style={styles.viewPlanLink}>View Plan</Text>
+            </TouchableOpacity>
           </View>
 
+          {/* Hero Image with Overlay Tags */}
           <View style={styles.heroImageContainer}>
             <Image source={{ uri: HERO_IMG }} style={styles.heroImg} />
 
-            {/* Tags */}
+            {/* Overlay tags - Focus, Goal, Duration */}
             <View style={styles.imageOverlayTags}>
               <View style={styles.glassTag}>
-                <Text style={styles.tagText}>Gentle</Text>
+                <Text style={styles.tagText}>{preferences?.focus || "Wellness"}</Text>
               </View>
+              {preferences?.goals && preferences.goals.length > 0 && (
+                <View style={styles.glassTag}>
+                  <Text style={styles.tagText}>{preferences.goals[0]}</Text>
+                </View>
+              )}
               <View style={styles.accentTag}>
-                <Text style={styles.tagText}>20 min</Text>
+                <Text style={styles.tagText}>{getTotalMinutes()} min</Text>
               </View>
-            </View>
-
-            {/* Overlay text (like your screenshot) */}
-            <View style={styles.heroImageTextOverlay}>
-              <Text style={styles.heroOverlayTitle}>
-                Morning Sun Salutation Flow
-              </Text>
-              <Text style={styles.heroOverlaySub}>with Luna Rivers</Text>
             </View>
           </View>
 
-          {/* ✅ Missing info/description added */}
-          <Text style={styles.heroDescription}>{HERO_DESC}</Text>
+          {/* Motivational Text - Below Image */}
+          <View style={styles.heroTextSection}>
+            <Text style={styles.heroTitle}>
+              Personalized Flow
+            </Text>
+            <Text style={styles.heroTagline}>
+              Transform your practice, one breath at a time.{"\n"}Your journey to wellness begins today.
+            </Text>
+            <Text style={styles.heroSubtext}>
+              3-part sequence: Warm-up, Practice, Cool-down
+            </Text>
+          </View>
 
-          <TouchableOpacity activeOpacity={0.9} style={styles.primaryBtn}>
+          {/* PLAY BUTTON - Wired to playlist mode */}
+          <TouchableOpacity
+            activeOpacity={0.9}
+            style={styles.primaryBtn}
+            onPress={handlePlayTodaysAbhyasa}
+          >
             <Ionicons
               name="play-circle"
               size={20}
@@ -126,7 +229,7 @@ export default function TodayScreen() {
           </TouchableOpacity>
         </View>
 
-        {/* 3. CONTINUE WATCHING (added) */}
+        {/* 4. CONTINUE WATCHING */}
         <View style={styles.continueCard}>
           <View style={styles.continueHeader}>
             <View style={styles.row}>
@@ -164,7 +267,7 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* 4. QUICK START GRID */}
+        {/* 5. QUICK START GRID */}
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>Quick Start</Text>
           <View style={styles.quickGrid}>
@@ -173,6 +276,7 @@ export default function TodayScreen() {
               color="#60A57A"
               title="Yoga"
               sub="15 min Flow"
+              onPress={() => handleQuickStart("Yoga")}
             />
             <QuickGridCard
               icon="weather-windy"
@@ -180,12 +284,14 @@ export default function TodayScreen() {
               isMCI
               title="Breathing"
               sub="5 min Calm"
+              onPress={() => handleQuickStart("Breathing")}
             />
             <QuickGridCard
               icon="heart"
               color="#D6946A"
               title="Meditation"
               sub="10 min Zen"
+              onPress={() => handleQuickStart("Meditation")}
             />
             <QuickGridCard
               icon="star-four-points"
@@ -193,11 +299,12 @@ export default function TodayScreen() {
               isMCI
               title="Challenges"
               sub="7-day Flex"
+              onPress={() => navigation.navigate(Routes.VIDEO_LIBRARY, { filter: "All" })}
             />
           </View>
         </View>
 
-        {/* 5. WEEKLY PROGRESS */}
+        {/* 6. WEEKLY PROGRESS */}
         <View style={styles.progressDetailCard}>
           <View style={styles.progressHeader}>
             <Ionicons name="calendar-outline" size={20} color="#5699AA" />
@@ -214,7 +321,7 @@ export default function TodayScreen() {
           </View>
         </View>
 
-        {/* 6. RECENT ACHIEVEMENTS (sparkles fixed) */}
+        {/* 7. RECENT ACHIEVEMENTS */}
         <View style={styles.section}>
           <View style={styles.achievementHeader}>
             <MaterialCommunityIcons
@@ -253,7 +360,7 @@ export default function TodayScreen() {
           </ScrollView>
         </View>
 
-        {/* 7. QUICK BREATHWORK BANNER (wind fixed) */}
+        {/* 8. QUICK BREATHWORK BANNER */}
         <TouchableOpacity
           activeOpacity={0.95}
           style={styles.breathworkContainer}
@@ -331,9 +438,9 @@ function AchievementBadge({
   );
 }
 
-function QuickGridCard({ icon, color, title, sub, isMCI = false }: any) {
+function QuickGridCard({ icon, color, title, sub, isMCI = false, onPress }: any) {
   return (
-    <TouchableOpacity style={styles.qgCard} activeOpacity={0.85}>
+    <TouchableOpacity style={styles.qgCard} activeOpacity={0.85} onPress={onPress}>
       <View style={[styles.qgIconCircle, { backgroundColor: color }]}>
         {isMCI ? (
           <MaterialCommunityIcons name={icon} size={20} color="#FFF" />
@@ -402,7 +509,13 @@ const styles = StyleSheet.create({
   cardTag: { fontSize: 16, fontWeight: "800", color: "#1A1A1A" },
   cardRecText: { fontSize: 12, color: "#718096", marginTop: 2 },
 
-  heroImageContainer: { height: 180, borderRadius: 18, overflow: "hidden" },
+  viewPlanLink: {
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#16A34A",
+  },
+
+  heroImageContainer: { height: 180, borderRadius: 18, overflow: "hidden", marginBottom: 14 },
   heroImg: { width: "100%", height: "100%" },
 
   imageOverlayTags: {
@@ -429,28 +542,38 @@ const styles = StyleSheet.create({
 
   tagText: { color: "#FFF", fontSize: 12, fontWeight: "800" },
 
-  heroImageTextOverlay: {
-    position: "absolute",
-    left: 14,
-    right: 14,
-    bottom: 12,
+  // Motivational text section - NOW BELOW IMAGE
+  heroTextSection: {
+    paddingHorizontal: 4,
+    marginBottom: 14,
   },
-  heroOverlayTitle: {
-    color: "#FFF",
+
+  heroTitle: {
+    color: "#1A1A1A",
     fontSize: 20,
     fontWeight: "900",
+    marginBottom: 8,
   },
-  heroOverlaySub: {
-    color: "rgba(255,255,255,0.85)",
+
+  heroTagline: {
+    color: "#4B5563",
+    fontSize: 13,
+    lineHeight: 18,
+    fontWeight: "600",
+    fontStyle: "italic",
+    marginBottom: 8,
+  },
+
+  heroSubtext: {
+    color: "#6B7280",
     fontSize: 12,
-    marginTop: 4,
     fontWeight: "700",
   },
 
   heroDescription: {
     marginTop: 14,
-    fontSize: 16,
-    lineHeight: 22,
+    fontSize: 14,
+    lineHeight: 20,
     color: "#718096",
     paddingHorizontal: 4,
   },
@@ -462,7 +585,6 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     justifyContent: "center",
-    marginTop: 14,
   },
   primaryBtnText: { color: "#FFF", fontSize: 16, fontWeight: "900" },
 

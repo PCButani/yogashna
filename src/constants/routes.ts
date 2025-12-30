@@ -22,6 +22,8 @@ export const Routes = {
   TODAY: "Today",
   WELLNESS_GOALS: "WellnessGoals",
   PROGRAM_DETAIL: "ProgramDetail",
+  MY_ABHYASA_PROGRAM: "MyAbhyasaProgram",
+  VIDEO_LIBRARY: "VideoLibrary",
   COMMON_PLAYER: "CommonPlayer",
 
   // Tab Screens
@@ -29,6 +31,9 @@ export const Routes = {
   LIVE: "Live",
   PROGRESS: "Progress",
   PROFILE: "Profile",
+
+  // Settings Screens
+  NOTIFICATION_SETTINGS: "NotificationSettings",
 } as const;
 
 export type RouteKey = keyof typeof Routes;

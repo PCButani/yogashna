@@ -8,11 +8,18 @@ import {
   ActivityIndicator,
   Platform,
   useWindowDimensions,
+  StatusBar,
 } from "react-native";
+import { useSafeAreaInsets } from "react-native-safe-area-context";
+// Requires: npx expo install expo-screen-orientation
+import * as ScreenOrientation from "expo-screen-orientation";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Ionicons } from "@expo/vector-icons";
 import { useFocusEffect, useNavigation, useRoute } from "@react-navigation/native";
 import { useVideoPlayer, VideoView } from "expo-video";
+import { recordPracticeSession } from "../../services/ProgressTracking";
+import EndSessionCheckinModal from "../../components/player/EndSessionCheckinModal";
+import { Routes } from "../../constants/routes";
 
 type RouteParams = {
   // Legacy single session mode
@@ -32,20 +39,21 @@ type RouteParams = {
 
 const RESUME_PREFIX = "COMMON_PLAYER_RESUME::";
 
+// Layout constants (MVP-safe)
+const CONTROLS_ROW_HEIGHT = 72; // playlist row approx height
+const CONTROLS_GAP = 12;
+
 export default function CommonPlayerScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
+  const insets = useSafeAreaInsets();
 
   const params = (route?.params ?? {}) as RouteParams;
 
   // Build playlist from params
   const playlist = useMemo(() => {
-    if (params.playlist && params.playlist.length > 0) {
-      return params.playlist;
-    }
-    if (params.session) {
-      return [params.session];
-    }
+    if (params.playlist && params.playlist.length > 0) return params.playlist;
+    if (params.session) return [params.session];
     return [];
   }, [params.playlist, params.session]);
 
@@ -83,6 +91,30 @@ export default function CommonPlayerScreen() {
   const hasValidSource = !!videoUri;
   const isPlaylist = playlist.length > 1;
 
+  // Window info
+  const { width, height } = useWindowDimensions();
+  const isLandscapeDevice = width > height;
+
+  // Fullscreen state (controls orientation lock)
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  // UI state
+  const [showHeader, setShowHeader] = useState(true);
+  const [showControls, setShowControls] = useState(false);
+  const [isReady, setIsReady] = useState(false);
+  const [loadError, setLoadError] = useState(false);
+  const [showUpNext, setShowUpNext] = useState(false);
+  const [showCheckinModal, setShowCheckinModal] = useState(false);
+
+  // Playback state for MVP timer overlay
+  const [positionSec, setPositionSec] = useState(0);
+  const [durationSec, setDurationSec] = useState(0);
+
+  // Derived nav flags (declare BEFORE callbacks that depend on them)
+  const canGoPrevious = currentIndex > 0;
+  const canGoNext = currentIndex < playlist.length - 1;
+  const isLastVideo = currentIndex === playlist.length - 1;
+
   // Resume storage key
   const resumeStorageKey = useMemo(() => {
     const base = params.resumeKey?.trim()
@@ -91,22 +123,21 @@ export default function CommonPlayerScreen() {
     return `${RESUME_PREFIX}${base}`;
   }, [params.resumeKey, currentSession, videoUri]);
 
-  const [showHeader, setShowHeader] = useState(true);
-  const [showControls, setShowControls] = useState(false);
-  const { width, height } = useWindowDimensions();
-  const isLandscape = width > height;
-  const [isReady, setIsReady] = useState(false);
-  const [loadError, setLoadError] = useState(false);
   const lastSavedTimeRef = useRef<number>(0);
   const saveTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const completedSessionsRef = useRef(new Set<number>());
   const isMountedRef = useRef(true);
+  const hasShownCheckinRef = useRef(false);
 
+  // Create player
   const player = useVideoPlayer(videoUri || null, (p) => {
     if (isLocked) {
       p.pause();
       return;
     }
     p.loop = false;
+    p.timeUpdateEventInterval = 1;
   });
 
   const stopSaveTimer = useCallback(() => {
@@ -167,22 +198,17 @@ export default function CommonPlayerScreen() {
     setLoadError(false);
 
     try {
-      // Use replaceAsync instead of replace to avoid iOS warning
-      if (typeof player.replaceAsync === 'function') {
-        await player.replaceAsync(videoUri);
+      if (typeof (player as any).replaceAsync === "function") {
+        await (player as any).replaceAsync(videoUri);
       } else {
-        // Fallback for older versions
-        player.replace(videoUri);
+        (player as any).replace?.(videoUri);
       }
 
       if (!isMountedRef.current) return;
 
-      // Load resume position for new video
       await loadAndSeekResume();
-
       if (!isMountedRef.current) return;
 
-      // Start playing if not locked
       if (!isLocked) {
         try {
           player.play();
@@ -201,10 +227,11 @@ export default function CommonPlayerScreen() {
     }
   }, [hasValidSource, player, videoUri, loadAndSeekResume, isLocked]);
 
-  // When currentIndex changes, load new video
   useEffect(() => {
     void loadVideo();
-  }, [currentIndex, videoUri]);
+    // Reset check-in guard when changing videos
+    hasShownCheckinRef.current = false;
+  }, [currentIndex, videoUri, loadVideo]);
 
   // Screen focus/blur handling
   useFocusEffect(
@@ -213,7 +240,6 @@ export default function CommonPlayerScreen() {
 
       const run = async () => {
         if (!isMountedRef.current) return;
-
         if (!isLocked && hasValidSource) {
           try {
             await loadAndSeekResume();
@@ -240,7 +266,15 @@ export default function CommonPlayerScreen() {
           // ignore
         }
       };
-    }, [isLocked, hasValidSource, loadAndSeekResume, persistResumeTime, player, startSaveTimer, stopSaveTimer])
+    }, [
+      isLocked,
+      hasValidSource,
+      loadAndSeekResume,
+      persistResumeTime,
+      player,
+      startSaveTimer,
+      stopSaveTimer,
+    ])
   );
 
   // Lock handling
@@ -279,15 +313,48 @@ export default function CommonPlayerScreen() {
     navigation.goBack();
   }, [navigation, persistResumeTime, player, stopSaveTimer]);
 
+  const handleToggleFullscreen = useCallback(async () => {
+    const next = !isFullscreen;
+    setIsFullscreen(next);
+
+    try {
+      // Keep scrubber available: do NOT disable native controls based on fullscreen.
+      if (next) {
+        StatusBar.setHidden(true, "fade");
+        await ScreenOrientation.lockAsync(ScreenOrientation.OrientationLock.LANDSCAPE);
+      } else {
+        StatusBar.setHidden(false, "fade");
+        await ScreenOrientation.unlockAsync();
+      }
+    } catch (e) {
+      // Fallback: at least hide/show status bar
+      StatusBar.setHidden(next, "fade");
+    }
+  }, [isFullscreen]);
+
+  useEffect(() => {
+    return () => {
+      if (isFullscreen) {
+        StatusBar.setHidden(false, "fade");
+        try {
+          void ScreenOrientation.unlockAsync();
+        } catch {
+          // ignore
+        }
+      }
+    };
+  }, [isFullscreen]);
+
   const handlePrevious = useCallback(() => {
     if (currentIndex > 0) {
-      setCurrentIndex(prev => prev - 1);
+      setCurrentIndex((prev) => prev - 1);
     }
   }, [currentIndex]);
 
   const handleNext = useCallback(() => {
     if (currentIndex < playlist.length - 1) {
-      setCurrentIndex(prev => prev + 1);
+      setCurrentIndex((prev) => prev + 1);
+      setShowUpNext(false);
     }
   }, [currentIndex, playlist.length]);
 
@@ -296,10 +363,103 @@ export default function CommonPlayerScreen() {
     void loadVideo();
   }, [loadVideo]);
 
-  const canGoPrevious = currentIndex > 0;
-  const canGoNext = currentIndex < playlist.length - 1;
+  const handleCloseCheckin = useCallback(() => {
+    setShowCheckinModal(false);
+  }, []);
 
-  // Session info for playlist mode
+  const handleBackToToday = useCallback(() => {
+    setShowCheckinModal(false);
+    navigation.navigate(Routes.MAIN_TABS);
+  }, [navigation]);
+
+  const handleNextSessionFromCheckin = useCallback(() => {
+    setShowCheckinModal(false);
+    if (canGoNext) {
+      handleNext();
+    } else {
+      navigation.navigate(Routes.MAIN_TABS);
+    }
+  }, [canGoNext, handleNext, navigation]);
+
+  const recordSessionCompletion = useCallback(() => {
+    if (completedSessionsRef.current.has(currentIndex)) return;
+    completedSessionsRef.current.add(currentIndex);
+
+    const sessionDuration =
+      currentSession?.durationMin || Math.round((player?.duration ?? 0) / 60);
+
+    void recordPracticeSession(sessionDuration, 1).catch((err) => {
+      console.error("Failed to record session:", err);
+    });
+  }, [currentIndex, currentSession, player]);
+
+  const handlePlaybackEnded = useCallback(() => {
+    if (!isMountedRef.current) return;
+
+    recordSessionCompletion();
+
+    if (isPlaylist && !isLastVideo) {
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current);
+      }
+      autoAdvanceTimerRef.current = setTimeout(() => {
+        if (isMountedRef.current) {
+          setCurrentIndex((prev) => prev + 1);
+          setShowUpNext(false);
+        }
+      }, 500);
+      return;
+    }
+
+    setShowUpNext(false);
+    if (!hasShownCheckinRef.current) {
+      hasShownCheckinRef.current = true;
+      setTimeout(() => {
+        if (isMountedRef.current) {
+          setShowCheckinModal(true);
+        }
+      }, 800);
+    }
+  }, [isLastVideo, isPlaylist, recordSessionCompletion]);
+
+  // Subscribe to player events: time updates + play-to-end
+  useEffect(() => {
+    if (!player) return;
+
+    const playToEndSub = player.addListener("playToEnd", handlePlaybackEnded);
+
+    const timeUpdateSub = player.addListener("timeUpdate", ({ currentTime }) => {
+      try {
+        const dur = Number(player.duration ?? 0);
+        const cur = Number(currentTime ?? 0);
+
+        if (dur > 0) {
+          setDurationSec(dur);
+          setPositionSec(cur);
+
+          const remaining = dur - cur;
+          if (isPlaylist && !isLastVideo) {
+            setShowUpNext(remaining > 0 && remaining <= 5);
+          } else if (showUpNext) {
+            setShowUpNext(false);
+          }
+        }
+      } catch {
+        // ignore
+      }
+    });
+
+    return () => {
+      playToEndSub.remove();
+      timeUpdateSub.remove();
+      if (autoAdvanceTimerRef.current) {
+        clearTimeout(autoAdvanceTimerRef.current);
+        autoAdvanceTimerRef.current = null;
+      }
+    };
+  }, [handlePlaybackEnded, isLastVideo, isPlaylist, player, showUpNext]);
+
+  // Session meta
   const sessionInfo = useMemo(() => {
     if (!currentSession) return null;
     return {
@@ -308,22 +468,53 @@ export default function CommonPlayerScreen() {
     };
   }, [currentSession]);
 
+  // ====== MVP VIDEO LAYOUT RULES ======
+  // 1) In portrait device: always show video inside a 16:9 landscape frame (letterbox)
+  // 2) In fullscreen OR landscape device: fill the screen
+  const shouldFillScreen = isFullscreen || isLandscapeDevice;
+
+  // Reserve space above playlist controls so scrubber isn't blocked
+  const reservedBottomSpace =
+    isPlaylist && showControls ? insets.bottom + CONTROLS_ROW_HEIGHT + CONTROLS_GAP : 0;
+
+  // Simple MM:SS formatter
+  const fmt = (s: number) => {
+    if (!Number.isFinite(s) || s < 0) return "00:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    const mm = String(m).padStart(2, "0");
+    const ss = String(sec).padStart(2, "0");
+    return `${mm}:${ss}`;
+  };
+
+  const showFullscreenButton = showHeader && hasValidSource && !loadError;
+
   return (
     <View style={styles.safe}>
       <Pressable style={styles.playerWrap} onPress={onToggleHeader}>
         {/* Video */}
         {hasValidSource && !loadError ? (
-          <View style={styles.videoContainer}>
-            <VideoView
-              key={`${currentIndex}-${isLandscape ? "landscape" : "portrait"}`}
-              style={styles.video}
-              player={player}
-              nativeControls={!isLocked}
-              requiresLinearPlayback={false}
-              fullscreenOptions={{ enable: false }}
-              allowsPictureInPicture={!isLocked}
-              contentFit={isLandscape ? "cover" : "contain"}
-            />
+          <View
+            style={[
+              styles.videoContainer,
+              { paddingBottom: reservedBottomSpace },
+              !shouldFillScreen && styles.videoContainerLetterbox,
+            ]}
+          >
+            {/* 16:9 wrapper in portrait device (unless fullscreen) */}
+            <View style={[styles.videoFrame, !shouldFillScreen && styles.videoFrame16x9]}>
+              <VideoView
+                // IMPORTANT: do NOT key on orientation; it causes remount + button flicker
+                key={`${currentIndex}`}
+                style={styles.video}
+                player={player}
+                nativeControls={!isLocked} // keep scrubber available even in fullscreen
+                requiresLinearPlayback={false}
+                fullscreenOptions={{ enable: false }}
+                allowsPictureInPicture={!isLocked}
+                contentFit={shouldFillScreen ? "cover" : "contain"}
+              />
+            </View>
 
             {/* Loading overlay */}
             {!isReady && (
@@ -333,21 +524,52 @@ export default function CommonPlayerScreen() {
               </View>
             )}
 
+            {/* Minimal timer overlay (MVP) - does not block touches */}
+            {!loadError && hasValidSource && (
+              <View style={styles.timerOverlay} pointerEvents="none">
+                <Text style={styles.timerText}>
+                  {fmt(positionSec)} / {fmt(durationSec)}
+                </Text>
+                <View style={styles.timerBarTrack}>
+                  <View
+                    style={[
+                      styles.timerBarFill,
+                      {
+                        width:
+                          durationSec > 0
+                            ? `${Math.min(100, Math.max(0, (positionSec / durationSec) * 100))}%`
+                            : "0%",
+                      },
+                    ]}
+                  />
+                </View>
+              </View>
+            )}
+
             {/* Locked overlay */}
             {isLocked && (
               <View style={styles.lockOverlay} pointerEvents="auto">
                 <Ionicons name="lock-closed" size={30} color="#FFFFFF" />
                 <Text style={styles.lockTitle}>Locked</Text>
-                <Text style={styles.lockSub}>
-                  This content is for paid members.
-                </Text>
-                <TouchableOpacity
-                  style={styles.lockBtn}
-                  onPress={() => {}}
-                  activeOpacity={0.85}
-                >
+                <Text style={styles.lockSub}>This content is for paid members.</Text>
+                <TouchableOpacity style={styles.lockBtn} onPress={() => {}} activeOpacity={0.85}>
                   <Text style={styles.lockBtnText}>Unlock to Watch</Text>
                 </TouchableOpacity>
+              </View>
+            )}
+
+            {/* Up Next overlay */}
+            {showUpNext && canGoNext && !isLocked && (
+              <View style={styles.upNextOverlay} pointerEvents="box-none">
+                <View style={styles.upNextCard}>
+                  <Text style={styles.upNextLabel}>Up Next</Text>
+                  <Text style={styles.upNextTitle} numberOfLines={2}>
+                    {playlist[currentIndex + 1]?.title || "Next Session"}
+                  </Text>
+                  <View style={styles.upNextProgress}>
+                    <View style={styles.upNextProgressBar} />
+                  </View>
+                </View>
               </View>
             )}
           </View>
@@ -372,9 +594,7 @@ export default function CommonPlayerScreen() {
           <View style={styles.empty}>
             <Ionicons name="alert-circle" size={48} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>Video source not available yet</Text>
-            <Text style={styles.emptyText}>
-              This session is coming soon. Check back later!
-            </Text>
+            <Text style={styles.emptyText}>This session is coming soon. Check back later!</Text>
             <TouchableOpacity style={styles.emptyBtn} onPress={onBack}>
               <Text style={styles.emptyBtnText}>Go Back</Text>
             </TouchableOpacity>
@@ -382,42 +602,69 @@ export default function CommonPlayerScreen() {
         )}
 
         {/* Header overlay */}
-        {showHeader && !loadError && (
-          <View style={styles.header} pointerEvents="box-none">
-            <View style={styles.headerRow}>
+        {!loadError && (
+          <View
+            style={[
+              styles.header,
+              {
+                paddingTop: insets.top + 8,
+              },
+            ]}
+            pointerEvents="box-none"
+          >
+            <View style={styles.headerRow} pointerEvents="box-none">
               <TouchableOpacity onPress={onBack} style={styles.backBtn} hitSlop={10}>
                 <Ionicons name="chevron-back" size={24} color="#FFFFFF" />
               </TouchableOpacity>
-              <View style={styles.headerCenter}>
+
+              <View style={styles.headerCenter} pointerEvents="none">
                 <Text style={styles.headerTitle} numberOfLines={1}>
                   {title}
                 </Text>
                 {sessionInfo && (
                   <View style={styles.headerMeta}>
                     {sessionInfo.duration && (
-                      <Text style={styles.headerMetaText}>
-                        {sessionInfo.duration} min
-                      </Text>
+                      <Text style={styles.headerMetaText}>{sessionInfo.duration} min</Text>
                     )}
                     {sessionInfo.style && sessionInfo.duration && (
                       <Text style={styles.headerMetaText}> • </Text>
                     )}
                     {sessionInfo.style && (
-                      <Text style={styles.headerMetaText}>
-                        {sessionInfo.style}
-                      </Text>
+                      <Text style={styles.headerMetaText}>{sessionInfo.style}</Text>
                     )}
                   </View>
                 )}
               </View>
-              <View style={styles.headerRight} />
+
+              <View style={styles.headerRight}>
+                {showFullscreenButton && showControls && (
+                  <TouchableOpacity
+                    onPress={handleToggleFullscreen}
+                    style={styles.fullscreenBtn}
+                    hitSlop={10}
+                    disabled={!hasValidSource || loadError}
+                  >
+                    <Ionicons
+                      name={isFullscreen ? "contract" : "expand"}
+                      size={20}
+                      color="#FFFFFF"
+                    />
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           </View>
         )}
 
         {/* Playlist Controls */}
         {isPlaylist && showControls && hasValidSource && !loadError && (
-          <View style={styles.playlistControls} pointerEvents="box-none">
+          <View
+            style={[
+              styles.playlistControls,
+              { paddingBottom: insets.bottom + 12 },
+            ]}
+            pointerEvents="box-none"
+          >
             <View style={styles.playlistRow}>
               <TouchableOpacity
                 style={[styles.navBtn, !canGoPrevious && styles.navBtnDisabled]}
@@ -445,9 +692,7 @@ export default function CommonPlayerScreen() {
                 onPress={handleNext}
                 disabled={!canGoNext}
               >
-                <Text style={[styles.navText, !canGoNext && styles.navTextDisabled]}>
-                  Next
-                </Text>
+                <Text style={[styles.navText, !canGoNext && styles.navTextDisabled]}>Next</Text>
                 <Ionicons
                   name="play-skip-forward"
                   size={24}
@@ -458,6 +703,16 @@ export default function CommonPlayerScreen() {
           </View>
         )}
       </Pressable>
+
+      {/* End Session Check-in Modal */}
+      <EndSessionCheckinModal
+        visible={showCheckinModal}
+        onClose={handleCloseCheckin}
+        onBackToToday={handleBackToToday}
+        onNextSession={canGoNext ? handleNextSessionFromCheckin : undefined}
+        hasNextSession={canGoNext}
+        context={params.context}
+      />
     </View>
   );
 }
@@ -470,20 +725,64 @@ const styles = StyleSheet.create({
   playerWrap: {
     flex: 1,
   },
+
+  // ===== Video Layout =====
   videoContainer: {
     flex: 1,
     backgroundColor: "#000000",
+    justifyContent: "center",
+  },
+  // Letterbox container in portrait device (centers the 16:9 frame)
+  videoContainerLetterbox: {
+    justifyContent: "center",
+    alignItems: "center",
+  },
+  // Frame wrapper
+  videoFrame: {
+    width: "100%",
+    height: "100%",
+    backgroundColor: "#000000",
+  },
+  // 16:9 landscape frame when NOT fullscreen and device is portrait
+  videoFrame16x9: {
+    width: "100%",
+    aspectRatio: 16 / 9,
+    height: undefined,
   },
   video: {
     flex: 1,
     backgroundColor: "#000000",
   },
+
+  // Timer overlay (non-blocking)
+  timerOverlay: {
+    position: "absolute",
+    left: 14,
+    right: 14,
+    bottom: 14,
+    gap: 8,
+  },
+  timerText: {
+    color: "rgba(255,255,255,0.9)",
+    fontSize: 12,
+    fontWeight: "700",
+  },
+  timerBarTrack: {
+    height: 3,
+    borderRadius: 999,
+    backgroundColor: "rgba(255,255,255,0.25)",
+    overflow: "hidden",
+  },
+  timerBarFill: {
+    height: "100%",
+    backgroundColor: "#2E6B4F",
+  },
+
   header: {
     position: "absolute",
     top: 0,
     left: 0,
     right: 0,
-    paddingTop: Platform.OS === "android" ? 40 : 55,
     paddingBottom: 12,
     paddingHorizontal: 14,
     backgroundColor: "rgba(0,0,0,0.7)",
@@ -520,7 +819,18 @@ const styles = StyleSheet.create({
   headerRight: {
     width: 40,
     height: 40,
+    alignItems: "flex-end",
+    justifyContent: "center",
   },
+  fullscreenBtn: {
+    width: 32,
+    height: 32,
+    alignItems: "center",
+    justifyContent: "center",
+    borderRadius: 16,
+    backgroundColor: "rgba(255,255,255,0.15)",
+  },
+
   loadingOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -533,6 +843,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: "600",
   },
+
   lockOverlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: "center",
@@ -563,6 +874,7 @@ const styles = StyleSheet.create({
     color: "#111111",
     fontWeight: "800",
   },
+
   empty: {
     flex: 1,
     backgroundColor: "#1F2937",
@@ -635,7 +947,6 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
-    paddingBottom: Platform.OS === "android" ? 20 : 40,
     paddingHorizontal: 20,
     backgroundColor: "rgba(0,0,0,0.7)",
   },
@@ -675,5 +986,46 @@ const styles = StyleSheet.create({
     color: "#FFFFFF",
     fontSize: 13,
     fontWeight: "800",
+  },
+
+  // Up Next Overlay
+  upNextOverlay: {
+    position: "absolute",
+    right: 20,
+    maxWidth: 280,
+    bottom: 140,
+  },
+  upNextCard: {
+    backgroundColor: "rgba(0,0,0,0.85)",
+    borderRadius: 16,
+    padding: 16,
+    borderWidth: 2,
+    borderColor: "rgba(46,107,79,0.8)",
+  },
+  upNextLabel: {
+    color: "#9CA3AF",
+    fontSize: 11,
+    fontWeight: "700",
+    textTransform: "uppercase",
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  upNextTitle: {
+    color: "#FFFFFF",
+    fontSize: 15,
+    fontWeight: "800",
+    lineHeight: 20,
+    marginBottom: 10,
+  },
+  upNextProgress: {
+    height: 3,
+    backgroundColor: "rgba(255,255,255,0.2)",
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  upNextProgressBar: {
+    height: "100%",
+    width: "100%",
+    backgroundColor: "#2E6B4F",
   },
 });

@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -10,29 +10,100 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
-import { getProgramById } from "../../data/mock/programs";
-import { ProgramDay, Session } from "../../data/mock/models";
+import { getProgramTemplateById } from "../../data/sources/ProgramTemplates";
+import { getProgramScheduleById, type ScheduleDay, type ScheduleSession } from "../../data/sources/ProgramTemplateSchedules";
 import { Routes } from "../../constants/routes";
+import { useFavoritesStore } from "../../store/useFavoritesStore";
+import ContraindicationsModal from "../../components/safety/ContraindicationsModal";
+import { hasSafetyAcknowledgment, saveSafetyAcknowledgment } from "../../utils/safetyAck";
 
 export default function ProgramDetailScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
   const programId = route.params?.programId;
-  const program = getProgramById(programId);
+
+  // Favorites store
+  const { isFavorite, toggleFavorite } = useFavoritesStore();
+
+  // Modal state
+  const [showSafetyModal, setShowSafetyModal] = useState(false);
+  const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+
+  // Load ProgramTemplate (master content) and Schedule (day/session data)
+  const programTemplate = getProgramTemplateById(programId);
+  const schedule = getProgramScheduleById(programId);
 
   const completedDaysCount = useMemo(() => {
-    if (!program) return 0;
-    return program.days.filter((d) => d.state === "completed").length;
-  }, [program]);
+    if (!schedule) return 0;
+    return schedule.days.filter((d) => d.state === "completed").length;
+  }, [schedule]);
 
   const currentDay = useMemo(() => {
-    if (!program) return null;
-    return program.days.find((d) => d.state === "current");
-  }, [program]);
+    if (!schedule) return null;
+    return schedule.days.find((d) => d.state === "current");
+  }, [schedule]);
 
-  const handlePlayDay = (day: ProgramDay) => {
-    // Play entire day as a playlist
+  // Check if program requires safety acknowledgment
+  const requiresSafetyCheck = useMemo(() => {
+    if (!programTemplate) return false;
+    return programTemplate.safetyNotes && programTemplate.safetyNotes.length > 0;
+  }, [programTemplate]);
+
+  // ✅ FIXED: Safety check wrapper - shows modal if needed, otherwise proceeds
+  const performSafetyCheck = async (action: () => void) => {
+    if (!requiresSafetyCheck) {
+      // No safety notes, proceed immediately
+      action();
+      return;
+    }
+
+    // Check if user has already acknowledged
+    const hasAck = await hasSafetyAcknowledgment(programId);
+    if (hasAck) {
+      // Already acknowledged within 30 days, proceed
+      action();
+      return;
+    }
+
+    // Show modal and store pending action
+    setPendingAction(() => action);
+    setShowSafetyModal(true);
+  };
+
+  // Handle modal continue
+  const handleSafetyContinue = async () => {
+    try {
+      // Save acknowledgment
+      await saveSafetyAcknowledgment(programId);
+
+      // Close modal
+      setShowSafetyModal(false);
+
+      // Execute pending action
+      if (pendingAction) {
+        pendingAction();
+        setPendingAction(null);
+      }
+    } catch (error) {
+      console.error('Failed to save safety acknowledgment:', error);
+      // Still proceed even if save fails
+      setShowSafetyModal(false);
+      if (pendingAction) {
+        pendingAction();
+        setPendingAction(null);
+      }
+    }
+  };
+
+  // Handle modal cancel
+  const handleSafetyCancel = () => {
+    setShowSafetyModal(false);
+    setPendingAction(null);
+  };
+
+  // ✅ FIXED: Direct navigation functions without safety check
+  const navigateToPlayDay = (day: ScheduleDay) => {
     navigation.navigate(Routes.COMMON_PLAYER, {
       playlist: day.sessions,
       startIndex: 0,
@@ -40,8 +111,7 @@ export default function ProgramDetailScreen() {
     });
   };
 
-  const handlePlaySession = (day: ProgramDay, sessionIndex: number) => {
-    // Play single session but include full day playlist for continuity
+  const navigateToPlaySession = (day: ScheduleDay, sessionIndex: number) => {
     navigation.navigate(Routes.COMMON_PLAYER, {
       playlist: day.sessions,
       startIndex: sessionIndex,
@@ -49,13 +119,21 @@ export default function ProgramDetailScreen() {
     });
   };
 
-  const handleStartContinue = () => {
-    if (currentDay) {
-      handlePlayDay(currentDay);
-    }
+  // ✅ FIXED: Wrapped handlers that include safety check
+  const handlePlayDay = (day: ScheduleDay) => {
+    performSafetyCheck(() => navigateToPlayDay(day));
   };
 
-  if (!program) {
+  const handlePlaySession = (day: ScheduleDay, sessionIndex: number) => {
+    performSafetyCheck(() => navigateToPlaySession(day, sessionIndex));
+  };
+
+  const handleStartContinue = () => {
+    if (!currentDay) return;
+    performSafetyCheck(() => navigateToPlayDay(currentDay));
+  };
+
+  if (!programTemplate || !schedule) {
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.header}>
@@ -77,6 +155,8 @@ export default function ProgramDetailScreen() {
     );
   }
 
+  const isFav = isFavorite(programId);
+
   return (
     <SafeAreaView style={styles.safe}>
       <ScrollView showsVerticalScrollIndicator={false}>
@@ -89,12 +169,25 @@ export default function ProgramDetailScreen() {
             <Ionicons name="chevron-back" size={20} color="#111827" />
           </TouchableOpacity>
           <Text style={styles.headerTitle}>Program Overview</Text>
+
+          {/* Favorite button */}
+          <TouchableOpacity
+            onPress={() => toggleFavorite(programId)}
+            style={styles.favoriteBtn}
+            hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+          >
+            <Ionicons
+              name={isFav ? "heart" : "heart-outline"}
+              size={22}
+              color={isFav ? "#E53E3E" : "#6B7280"}
+            />
+          </TouchableOpacity>
         </View>
 
-        {/* Banner Image */}
+        {/* Banner Image from ProgramTemplate */}
         <View style={styles.bannerWrap}>
           <Image
-            source={{ uri: program.bannerImage }}
+            source={{ uri: programTemplate.heroImage }}
             style={styles.bannerImage}
           />
         </View>
@@ -109,27 +202,27 @@ export default function ProgramDetailScreen() {
             </Text>
           </View>
 
-          {/* Title */}
+          {/* Title from ProgramTemplate */}
           <View style={styles.titleWrap}>
-            <Text style={styles.title}>{program.title}</Text>
-            {program.sanskritTitle && (
-              <Text style={styles.sanskritTitle}>{program.sanskritTitle}</Text>
+            <Text style={styles.title}>{programTemplate.title}</Text>
+            {programTemplate.sanskritTitle && (
+              <Text style={styles.sanskritTitle}>{programTemplate.sanskritTitle}</Text>
             )}
-            <Text style={styles.subtitle}>{program.subtitle}</Text>
+            <Text style={styles.subtitle}>{programTemplate.subtitle}</Text>
           </View>
 
           {/* Meta Row */}
           <View style={styles.metaRow}>
             <View style={styles.metaItem}>
               <Ionicons name="bar-chart-outline" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>{program.level}</Text>
+              <Text style={styles.metaText}>{programTemplate.levelLabel}</Text>
             </View>
 
             <View style={styles.dot} />
 
             <View style={styles.metaItem}>
               <Ionicons name="calendar-outline" size={16} color="#6B7280" />
-              <Text style={styles.metaText}>{program.totalDays} days</Text>
+              <Text style={styles.metaText}>{schedule.totalDays} days</Text>
             </View>
 
             <View style={styles.dot} />
@@ -137,16 +230,16 @@ export default function ProgramDetailScreen() {
             <View style={styles.metaItem}>
               <Ionicons name="time-outline" size={16} color="#6B7280" />
               <Text style={styles.metaText}>
-                ~{program.avgDailyMinutes} min/day
+                ~{schedule.avgDailyMinutes} min/day
               </Text>
             </View>
           </View>
 
-          {/* Benefits */}
+          {/* Benefits from ProgramTemplate */}
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Benefits</Text>
             <View style={styles.benefitsWrap}>
-              {program.benefits.map((benefit, idx) => (
+              {programTemplate.benefits.map((benefit, idx) => (
                 <View key={idx} style={styles.benefitChip}>
                   <Ionicons name="checkmark-circle" size={16} color="#2E6B4F" />
                   <Text style={styles.benefitText}>{benefit}</Text>
@@ -155,12 +248,12 @@ export default function ProgramDetailScreen() {
             </View>
           </View>
 
-          {/* Equipment */}
-          {program.equipment && program.equipment.length > 0 && (
+          {/* Equipment from ProgramTemplate */}
+          {programTemplate.whatYouNeed && programTemplate.whatYouNeed.length > 0 && (
             <View style={styles.section}>
               <Text style={styles.sectionTitle}>What you'll need</Text>
               <View style={styles.equipmentWrap}>
-                {program.equipment.map((item, idx) => (
+                {programTemplate.whatYouNeed.map((item, idx) => (
                   <View key={idx} style={styles.equipmentItem}>
                     <View style={styles.equipmentDot} />
                     <Text style={styles.equipmentText}>{item}</Text>
@@ -170,31 +263,16 @@ export default function ProgramDetailScreen() {
             </View>
           )}
 
-          {/* Disclaimer */}
-          {program.disclaimer && (
-            <View style={styles.disclaimerBox}>
-              <View style={styles.disclaimerHeader}>
-                <Ionicons
-                  name="information-circle-outline"
-                  size={18}
-                  color="#D97706"
-                />
-                <Text style={styles.disclaimerTitle}>Important Note</Text>
-              </View>
-              <Text style={styles.disclaimerText}>{program.disclaimer}</Text>
-            </View>
-          )}
-
-          {/* Contraindications */}
-          {program.contraindications && program.contraindications.length > 0 && (
+          {/* Safety Notes from ProgramTemplate */}
+          {programTemplate.safetyNotes && programTemplate.safetyNotes.length > 0 && (
             <View style={styles.contraindicationsBox}>
               <View style={styles.contraindicationsHeader}>
                 <Ionicons name="alert-circle-outline" size={18} color="#DC2626" />
                 <Text style={styles.contraindicationsTitle}>
-                  Contraindications
+                  Safety Notes
                 </Text>
               </View>
-              {program.contraindications.map((item, idx) => (
+              {programTemplate.safetyNotes.map((item, idx) => (
                 <View key={idx} style={styles.contraindicationItem}>
                   <View style={styles.contraindicationDot} />
                   <Text style={styles.contraindicationText}>{item}</Text>
@@ -221,12 +299,12 @@ export default function ProgramDetailScreen() {
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Program Sessions</Text>
             <Text style={styles.sectionSubtitle}>
-              {completedDaysCount} of {program.totalDays} sessions explored
+              {completedDaysCount} of {schedule.totalDays} sessions explored
             </Text>
           </View>
 
           <View style={styles.daysList}>
-            {program.days.map((day) => (
+            {schedule.days.map((day) => (
               <DayCard
                 key={day.dayNumber}
                 day={day}
@@ -237,6 +315,17 @@ export default function ProgramDetailScreen() {
           </View>
         </View>
       </ScrollView>
+
+      {/* Safety Modal */}
+      {programTemplate.safetyNotes && programTemplate.safetyNotes.length > 0 && (
+        <ContraindicationsModal
+          visible={showSafetyModal}
+          programTitle={programTemplate.title}
+          safetyNotes={programTemplate.safetyNotes}
+          onCancel={handleSafetyCancel}
+          onContinue={handleSafetyContinue}
+        />
+      )}
     </SafeAreaView>
   );
 }
@@ -250,7 +339,7 @@ function DayCard({
   onPlayDay,
   onPlaySession,
 }: {
-  day: ProgramDay;
+  day: ScheduleDay;
   onPlayDay: () => void;
   onPlaySession: (sessionIndex: number) => void;
 }) {
@@ -373,6 +462,17 @@ const styles = StyleSheet.create({
     fontWeight: "800",
     color: "#111827",
     flex: 1,
+  },
+
+  favoriteBtn: {
+    width: 40,
+    height: 40,
+    borderRadius: 14,
+    backgroundColor: "#F7FAF8",
+    borderWidth: 1,
+    borderColor: "#E6EFE9",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
   bannerWrap: {

@@ -8,6 +8,10 @@ import {
   ScrollView,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
+import { useNavigation } from "@react-navigation/native";
+import { NativeStackNavigationProp } from "@react-navigation/native-stack";
+import { RootStackParamList } from "../../types/navigation";
+import { Routes } from "../../constants/routes";
 
 /**
  * ProfileScreen (Final Locked - TS/Expo Safe)
@@ -20,8 +24,14 @@ type Lang = "English" | "हिंदी" | "ગુજરાતી";
 type Tab = "Journey" | "Settings";
 
 type IconName = any; // Expo Ionicons name typing varies by version; keep safe to remove TS redlines.
+type ProfileScreenNavigationProp = NativeStackNavigationProp<
+  RootStackParamList,
+  "Profile"
+>;
 
 export default function ProfileScreen() {
+  const navigation = useNavigation<ProfileScreenNavigationProp>();
+
   // ---- Mock user data (replace with store/API later) ----
   const user = useMemo(
     () => ({
@@ -373,6 +383,7 @@ export default function ProfileScreen() {
               iconName="notifications-outline"
               title="Notifications"
               subtitle="Reminders & gentle nudges"
+              onPress={() => navigation.navigate(Routes.NOTIFICATION_SETTINGS)}
             />
             <Divider />
             <SettingsRow
@@ -502,17 +513,19 @@ function SettingsRow({
   title,
   subtitle,
   danger,
+  onPress,
 }: {
   iconName: IconName;
   title: string;
   subtitle: string;
   danger?: boolean;
+  onPress?: () => void;
 }) {
   return (
     <TouchableOpacity
       style={styles.settingsRow}
       activeOpacity={0.8}
-      onPress={() => {}}
+      onPress={onPress || (() => {})}
     >
       <View style={styles.settingsLeft}>
         <View

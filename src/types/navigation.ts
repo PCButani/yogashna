@@ -27,6 +27,8 @@ export type RootStackParamList = {
   Today: undefined;
   WellnessGoals: { wellnessCategory: WellnessCategory };
   ProgramDetail: { programId: string };
+  MyAbhyasaProgram: undefined;
+  VideoLibrary: { filter?: "All" | "Yoga" | "Breathing" | "Meditation" };
   CommonPlayer: {
     // Support both single session (legacy) and playlist modes
     session?: any; // Legacy: single session
@@ -35,6 +37,7 @@ export type RootStackParamList = {
     context?: { programId?: string; dayNumber?: number }; // Optional context
   };
   MainTabs: undefined;
+  NotificationSettings: undefined;
 };
 
 /**

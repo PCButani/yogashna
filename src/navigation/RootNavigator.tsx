@@ -14,7 +14,10 @@ import TodayScreen from "../screens/Dashboard/TodayScreen";
 import MainTabsNavigator from "./MainTabsNavigator";
 import WellnessGoalsScreen from "../screens/Library/WellnessGoalsScreen";
 import ProgramDetailScreen from "../screens/Library/ProgramDetailScreen";
+import VideoLibraryScreen from "../screens/Library/VideoLibraryScreen";
+import MyAbhyasaProgramScreen from "../screens/Abhyasa/MyAbhyasaProgramScreen";
 import CommonPlayerScreen from "../screens/Player/CommonPlayerScreen";
+import NotificationSettingsScreen from "../screens/Settings/NotificationSettingsScreen";
 import { RootStackParamList } from "../types/navigation";
 import { Routes } from "../constants/routes";
 
@@ -37,7 +40,10 @@ export default function RootNavigator() {
           <Stack.Screen name={Routes.TODAY} component={TodayScreen} />
           <Stack.Screen name={Routes.WELLNESS_GOALS} component={WellnessGoalsScreen} />
           <Stack.Screen name={Routes.PROGRAM_DETAIL} component={ProgramDetailScreen} />
+          <Stack.Screen name={Routes.MY_ABHYASA_PROGRAM} component={MyAbhyasaProgramScreen} />
+          <Stack.Screen name={Routes.VIDEO_LIBRARY} component={VideoLibraryScreen} />
           <Stack.Screen name={Routes.COMMON_PLAYER} component={CommonPlayerScreen} />
+          <Stack.Screen name={Routes.NOTIFICATION_SETTINGS} component={NotificationSettingsScreen} />
           <Stack.Screen name={Routes.MAIN_TABS} component={MainTabsNavigator} />
         </Stack.Navigator>
       </NavigationContainer>
