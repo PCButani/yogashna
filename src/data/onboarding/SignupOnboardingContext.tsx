@@ -17,6 +17,7 @@ export type BestTime = "Morning" | "Evening" | "Anytime" | null;
 export type SignupOnboardingData = {
   focus: WellnessFocus;
   goals: string[];
+  name: string;
   level: PracticeLevel;
   length: SessionLength;
   time: BestTime;
@@ -26,6 +27,7 @@ type Ctx = {
   data: SignupOnboardingData;
   setFocus: (v: WellnessFocus) => void;
   toggleGoal: (goal: string) => void;
+  setName: (v: string) => void;
   setLevel: (v: PracticeLevel) => void;
   setLength: (v: SessionLength) => void;
   setTime: (v: BestTime) => void;
@@ -35,6 +37,7 @@ type Ctx = {
 const defaultData: SignupOnboardingData = {
   focus: null,
   goals: [],
+  name: "",
   level: null,
   length: null,
   time: null,
@@ -60,6 +63,7 @@ export function SignupOnboardingProvider({ children }: { children: React.ReactNo
           const goals = exists ? prev.goals.filter((g) => g !== goal) : [...prev.goals, goal];
           return { ...prev, goals };
         }),
+      setName: (v) => setData((prev) => ({ ...prev, name: v })),
       setLevel: (v) => setData((prev) => ({ ...prev, level: v })),
       setLength: (v) => setData((prev) => ({ ...prev, length: v })),
       setTime: (v) => setData((prev) => ({ ...prev, time: v })),

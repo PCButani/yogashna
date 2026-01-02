@@ -76,6 +76,18 @@ export default function GoalsScreen() {
     ? `Select ${remaining} more`
     : "Max 5 selected";
 
+  const handleGoalPress = (goal: string) => {
+    const isSelected = data.goals.includes(goal);
+    const wouldExceedMax = !isSelected && selectedCount >= 5;
+
+    if (wouldExceedMax) {
+      // Don't toggle, just return (button won't respond)
+      return;
+    }
+
+    toggleGoal(goal);
+  };
+
   const onContinue = () => {
     if (!canContinue) return;
     navigation.navigate("AboutYou");
@@ -88,7 +100,7 @@ export default function GoalsScreen() {
         <View style={styles.header}>
           <Text style={styles.title}>Choose your goals</Text>
           <Text style={styles.subtitle}>
-            Pick 2–5 goals so we can personalize your practice
+            Select 2 to 5 goals so we can personalize your practice
           </Text>
 
           <View style={styles.helperRow}>
@@ -115,7 +127,7 @@ export default function GoalsScreen() {
               <TouchableOpacity
                 key={g}
                 activeOpacity={0.9}
-                onPress={() => toggleGoal(g)}
+                onPress={() => handleGoalPress(g)}
                 style={[styles.goalCard, selected && styles.goalCardSelected]}
               >
                 <Text

@@ -42,11 +42,13 @@ function calcBmiKgCm(weightKg: number, heightCm: number) {
 
 export default function AboutYouScreen() {
   const navigation = useNavigation<any>();
-  const onboarding = useSignupOnboarding();
+  const { data, setName } = useSignupOnboarding();
 
   // Pre-fill if available (optional)
-  const initial = (onboarding as any)?.state?.personalInfo ?? (onboarding as any)?.personalInfo ?? {};
+  const initial = (data as any)?.personalInfo ?? {};
 
+  const [name, setNameLocal] = useState<string>(data.name || "");
+  const [nameTouched, setNameTouched] = useState(false);
   const [age, setAge] = useState<string>(initial?.age ? String(initial.age) : "");
   const [gender, setGender] = useState<GenderOption>(
     initial?.gender === "male" || initial?.gender === "female" || initial?.gender === "na"
@@ -57,6 +59,9 @@ export default function AboutYouScreen() {
   const [weightKg, setWeightKg] = useState<string>(initial?.weightKg ? String(initial.weightKg) : "");
 
   const computed = useMemo(() => {
+    const nameTrimmed = name.trim();
+    const nameOk = nameTrimmed.length > 0;
+
     const ageN = clampInt(age, 13, 100); // keep wide but safe
     const h = parseNumber(heightCm);
     const w = parseNumber(weightKg);
@@ -68,6 +73,8 @@ export default function AboutYouScreen() {
     const bmi = heightOk && weightOk ? calcBmiKgCm(w!, h!) : null;
 
     return {
+      nameOk,
+      nameTrimmed,
       ageN,
       heightN: heightOk ? h : null,
       weightN: weightOk ? w : null,
@@ -75,19 +82,22 @@ export default function AboutYouScreen() {
       ageOk,
       heightOk,
       weightOk,
-      canContinue: ageOk && heightOk && weightOk,
+      canContinue: nameOk && ageOk && heightOk && weightOk,
     };
-  }, [age, heightCm, weightKg]);
+  }, [name, age, heightCm, weightKg]);
 
   const onContinue = () => {
     if (!computed.canContinue) {
       // Soft validation — avoid harsh red, but still guide
       Alert.alert(
         "Just a quick check",
-        "Please enter a valid age, height (cm), and weight (kg) so we can personalize your practice safely."
+        "Please enter your name and valid age, height (cm), and weight (kg) so we can personalize your practice safely."
       );
       return;
     }
+
+    // Save name to context
+    setName(computed.nameTrimmed);
 
     const payload = {
       age: computed.ageN,
@@ -99,7 +109,7 @@ export default function AboutYouScreen() {
 
     // ✅ Save to your context (support multiple naming styles)
     // Prefer a dedicated setter if you have one:
-    const anyOnboarding = onboarding as any;
+    const anyOnboarding = { setName } as any;
 
     if (typeof anyOnboarding?.setPersonalInfo === "function") {
       anyOnboarding.setPersonalInfo(payload);
@@ -136,6 +146,26 @@ export default function AboutYouScreen() {
             <Text style={styles.noteText}>
               Your information is private and only used to personalize your practice.
             </Text>
+          </View>
+
+          {/* Full Name */}
+          <View style={styles.fieldGroup}>
+            <Text style={styles.label}>Full Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setNameLocal}
+              onBlur={() => setNameTouched(true)}
+              placeholder="e.g., Priya Sharma"
+              placeholderTextColor="#9AA3A7"
+              keyboardType="default"
+              autoCapitalize="words"
+              style={styles.input}
+              maxLength={50}
+              returnKeyType="next"
+            />
+            {nameTouched && !computed.nameOk && (
+              <Text style={styles.errorText}>Please enter your name</Text>
+            )}
           </View>
 
           {/* Age */}
@@ -315,6 +345,12 @@ const styles = StyleSheet.create({
     marginTop: 6,
     fontSize: 12,
     color: "#7A868A",
+  },
+  errorText: {
+    marginTop: 6,
+    fontSize: 12,
+    color: "#D14343",
+    fontWeight: "500",
   },
   pillsRow: {
     flexDirection: "row",

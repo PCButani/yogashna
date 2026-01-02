@@ -9,8 +9,10 @@ import {
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation } from "@react-navigation/native";
+import { CompositeNavigationProp } from "@react-navigation/native";
+import { BottomTabNavigationProp } from "@react-navigation/bottom-tabs";
 import { NativeStackNavigationProp } from "@react-navigation/native-stack";
-import { RootStackParamList } from "../../types/navigation";
+import { RootStackParamList, MainTabParamList } from "../../types/navigation";
 import { Routes } from "../../constants/routes";
 import { useFavoritesStore } from "../../store/useFavoritesStore";
 
@@ -25,9 +27,9 @@ type Lang = "English" | "हिंदी" | "ગુજરાતી";
 type Tab = "Journey" | "Settings";
 
 type IconName = any; // Expo Ionicons name typing varies by version; keep safe to remove TS redlines.
-type ProfileScreenNavigationProp = NativeStackNavigationProp<
-  RootStackParamList,
-  "Profile"
+type ProfileScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<MainTabParamList, "Profile">,
+  NativeStackNavigationProp<RootStackParamList>
 >;
 
 export default function ProfileScreen() {
@@ -36,12 +38,12 @@ export default function ProfileScreen() {
   // ✅ FIXED: Use global favorites store
   const favoritesCount = useFavoritesStore((state) => state.getFavoritesCount());
 
-  // ---- Mock user data (replace with store/API later) ----
+  // ---- Guest user data (no hardcoding) ----
   const user = useMemo(
     () => ({
-      name: "Beautiful Soul",
-      email: "butani.dhaval@gmail.com",
-      initials: "BU",
+      name: "Guest",
+      email: "Sign in to sync your progress",
+      initials: "G",
     }),
     []
   );
@@ -49,11 +51,12 @@ export default function ProfileScreen() {
   const [lang, setLang] = useState<Lang>("English");
   const [tab, setTab] = useState<Tab>("Journey");
 
+  // ---- Empty stats (no hardcoding) ----
   const stats = useMemo(
     () => ({
-      streakDays: 7,
-      sessions: 47,
-      totalTimeHours: 21,
+      streakDays: "—",
+      sessions: "—",
+      totalTimeHours: "—",
     }),
     []
   );
@@ -75,37 +78,24 @@ export default function ProfileScreen() {
     []
   );
 
-  const achievements = useMemo(
-    () => ({
-      unlocked: 3,
-      total: 8,
-      items: [
-        { title: "First Light", emoji: "✨", tone: "green" as const },
-        { title: "Week Warrior", emoji: "🏆", tone: "amber" as const },
-        { title: "Dawn Blessing", emoji: "🌅", tone: "blue" as const },
-      ],
-    }),
-    []
-  );
-
   const journeyCards = useMemo(
     () => [
       {
         iconName: "calendar-outline" as IconName,
         iconColor: "#2563EB",
-        value: `${stats.sessions}`,
+        value: stats.sessions,
         label: "Sessions",
       },
       {
         iconName: "time-outline" as IconName,
         iconColor: "#16A34A",
-        value: `${stats.totalTimeHours}h`,
+        value: stats.totalTimeHours === "—" ? "—" : `${stats.totalTimeHours}h`,
         label: "Total Time",
       },
       {
         iconName: "flame-outline" as IconName,
         iconColor: "#F97316",
-        value: `${stats.streakDays}`,
+        value: stats.streakDays,
         label: "Current Streak",
       },
       {
@@ -142,7 +132,7 @@ export default function ProfileScreen() {
             style={styles.headerAvatarSmall}
             accessibilityLabel="Profile avatar"
           >
-            <Text style={styles.headerAvatarText}>B</Text>
+            <Text style={styles.headerAvatarText}>G</Text>
           </View>
         </View>
 
@@ -186,48 +176,22 @@ export default function ProfileScreen() {
           </View>
         </View>
 
-        {/* Achievements */}
+        {/* Achievements - EMPTY STATE */}
         <View style={styles.sectionCard}>
           <View style={styles.sectionHeaderRow}>
             <View style={styles.sectionTitleRow}>
               <Ionicons name={"sparkles-outline"} size={18} color="#F59E0B" />
               <Text style={styles.sectionTitle}>Your Sacred Achievements</Text>
             </View>
-
-            <TouchableOpacity onPress={() => {}} activeOpacity={0.8}>
-              <Text style={styles.linkText}>View All</Text>
-            </TouchableOpacity>
           </View>
 
-          <View style={styles.achievementRow}>
-            {achievements.items.map((a, idx) => (
-              <View
-                key={`${a.title}-${idx}`}
-                style={[
-                  styles.achievementTileWrap,
-                  idx < achievements.items.length - 1 && styles.mr10,
-                ]}
-              >
-                <View
-                  style={[
-                    styles.achievementTile,
-                    a.tone === "green" && styles.toneGreen,
-                    a.tone === "amber" && styles.toneAmber,
-                    a.tone === "blue" && styles.toneBlue,
-                  ]}
-                >
-                  <Text style={styles.achievementEmoji}>{a.emoji}</Text>
-                  <Text style={styles.achievementText}>{a.title}</Text>
-                </View>
-              </View>
-            ))}
+          <View style={styles.emptyStateContainer}>
+            <Ionicons name="trophy-outline" size={48} color="#CBD5E1" />
+            <Text style={styles.emptyStateTitle}>No achievements yet</Text>
+            <Text style={styles.emptyStateText}>
+              Complete your first session to unlock badges.
+            </Text>
           </View>
-
-          <Text style={styles.achievementMeta}>
-            {achievements.unlocked} of {achievements.total} achievements unlocked
-            with grace
-          </Text>
-          <Text style={styles.centerEmoji}>🌟</Text>
         </View>
 
         {/* Top Stats */}
@@ -237,7 +201,7 @@ export default function ProfileScreen() {
               iconName="flame-outline"
               iconBg="#E8F2E8"
               iconColor="#2E7D32"
-              value={`${stats.streakDays}`}
+              value={stats.streakDays}
               label="Day Streak"
             />
           </View>
@@ -246,7 +210,7 @@ export default function ProfileScreen() {
               iconName="calendar-outline"
               iconBg="#EAF1FB"
               iconColor="#2563EB"
-              value={`${stats.sessions}`}
+              value={stats.sessions}
               label="Sessions"
             />
           </View>
@@ -255,11 +219,15 @@ export default function ProfileScreen() {
               iconName="time-outline"
               iconBg="#FCEFE6"
               iconColor="#F97316"
-              value={`${stats.totalTimeHours}h`}
+              value={stats.totalTimeHours === "—" ? "—" : `${stats.totalTimeHours}h`}
               label="Total Time"
             />
           </View>
         </View>
+
+        <Text style={styles.statsNote}>
+          Your stats will appear after your first session.
+        </Text>
 
         {/* My Yoga Abhyāsa */}
         <View style={styles.sectionCard}>
@@ -269,9 +237,7 @@ export default function ProfileScreen() {
               <Text style={styles.sectionTitle}>My Yoga Abhyāsa</Text>
             </View>
 
-            <TouchableOpacity onPress={() => {}} activeOpacity={0.8}>
-              <Text style={styles.linkText}>Edit My Practice</Text>
-            </TouchableOpacity>
+            <Text style={styles.comingSoonText}>Coming soon</Text>
           </View>
 
           <View style={styles.focusPillsWrap}>
@@ -530,6 +496,7 @@ function SettingsRow({
       style={styles.settingsRow}
       activeOpacity={0.8}
       onPress={onPress || (() => {})}
+      disabled={!onPress}
     >
       <View style={styles.settingsLeft}>
         <View
@@ -553,7 +520,7 @@ function SettingsRow({
         </View>
       </View>
 
-      <Ionicons name={"chevron-forward"} size={18} color="#94A3B8" />
+      {onPress && <Ionicons name={"chevron-forward"} size={18} color="#94A3B8" />}
     </TouchableOpacity>
   );
 }
@@ -675,7 +642,27 @@ const styles = StyleSheet.create({
   },
   sectionTitleRow: { flexDirection: "row", alignItems: "center" },
   sectionTitle: { marginLeft: 8, fontSize: 16, fontWeight: "800", color: "#0F172A" },
-  linkText: { fontSize: 13, fontWeight: "700", color: "#2563EB" },
+
+  comingSoonText: { fontSize: 13, fontWeight: "700", color: "#94A3B8" },
+
+  emptyStateContainer: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 24,
+  },
+  emptyStateTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#64748B",
+    marginTop: 12,
+  },
+  emptyStateText: {
+    fontSize: 14,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginTop: 6,
+    fontWeight: "600",
+  },
 
   achievementRow: { flexDirection: "row", marginTop: 14 },
   achievementTileWrap: { flex: 1 },
@@ -704,8 +691,16 @@ const styles = StyleSheet.create({
   },
   centerEmoji: { textAlign: "center", marginTop: 6 },
 
-  statsRow: { flexDirection: "row", marginBottom: 12 },
+  statsRow: { flexDirection: "row", marginBottom: 8 },
   statWrap: { flex: 1, marginRight: 10 },
+
+  statsNote: {
+    fontSize: 12,
+    color: "#94A3B8",
+    textAlign: "center",
+    marginBottom: 12,
+    fontWeight: "600",
+  },
   statCard: {
     backgroundColor: "#FFFFFF",
     borderRadius: 18,

@@ -29,19 +29,9 @@ import { getPracticePreferences } from "../../services/PracticePreferences";
 import { getProgressData } from "../../services/ProgressTracking";
 import type { AbhyasaCycle, AbhyasaDayPlan, ProgramTemplate } from "../../data/models/ProgramTemplate";
 import { Routes } from "../../constants/routes";
+import DayCard, { type DayCardSession, type DayCardStatus } from "../../components/DayCard";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
-
-const shadow = Platform.select({
-  android: { elevation: 2 },
-  ios: {
-    shadowColor: "#000",
-    shadowOpacity: 0.06,
-    shadowRadius: 10,
-    shadowOffset: { width: 0, height: 4 },
-  },
-  default: {},
-});
 
 export default function MyAbhyasaProgramScreen() {
   const navigation = useNavigation<NavigationProp>();
@@ -220,97 +210,34 @@ export default function MyAbhyasaProgramScreen() {
                   const isCompleted = completedDays.has(day.dayNumber);
                   const isCurrent = day.dayNumber === 1; // Mock current day
 
+                  // Transform sessions to DayCard format
+                  const daySessions: DayCardSession[] = day.sessions.map((session) => ({
+                    id: session.id,
+                    title: session.title,
+                    durationMin: session.durationMin,
+                    style: session.style,
+                    sequenceType: session.sequenceType,
+                    completed: isCompleted,
+                  }));
+
+                  // Determine status
+                  const status: DayCardStatus = isCompleted
+                    ? "completed"
+                    : isCurrent
+                    ? "upNext"
+                    : "locked";
+
                   return (
-                    <View key={day.dayNumber} style={styles.dayCard}>
-                      {/* Day Header */}
-                      <View style={styles.dayHeader}>
-                        <View style={styles.dayHeaderLeft}>
-                          <View
-                            style={[
-                              styles.dayNumberCircle,
-                              isCompleted && styles.dayNumberCircleCompleted,
-                              isCurrent && styles.dayNumberCircleCurrent,
-                            ]}
-                          >
-                            {isCompleted ? (
-                              <Ionicons name="checkmark" size={16} color="#FFF" />
-                            ) : (
-                              <Text
-                                style={[
-                                  styles.dayNumberText,
-                                  isCurrent && styles.dayNumberTextCurrent,
-                                ]}
-                              >
-                                {day.dayNumber}
-                              </Text>
-                            )}
-                          </View>
-                          <View style={{ flex: 1 }}>
-                            <Text style={styles.dayTitle}>Day {day.dayNumber}</Text>
-                            <Text style={styles.dayTheme}>{day.theme}</Text>
-                          </View>
-                        </View>
-                        <TouchableOpacity
-                          style={styles.playDayBtn}
-                          onPress={() => handlePlayDay(day)}
-                          activeOpacity={0.7}
-                        >
-                          <Ionicons name="play-circle" size={28} color="#E9A46A" />
-                        </TouchableOpacity>
-                      </View>
-
-                      {/* Session List */}
-                      <View style={styles.sessionsList}>
-                        {day.sessions.map((session, idx) => (
-                          <TouchableOpacity
-                            key={session.id}
-                            style={styles.sessionRow}
-                            onPress={() => handlePlaySession(day, idx)}
-                            activeOpacity={0.7}
-                          >
-                            <View style={styles.sessionIconCircle}>
-                              <Ionicons
-                                name={
-                                  session.sequenceType === "warmup"
-                                    ? "sunny-outline"
-                                    : session.sequenceType === "main"
-                                    ? "body-outline"
-                                    : "leaf-outline"
-                                }
-                                size={14}
-                                color="#16A34A"
-                              />
-                            </View>
-                            <View style={styles.sessionInfo}>
-                              <Text style={styles.sessionTitle} numberOfLines={1}>
-                                {session.title}
-                              </Text>
-                              <View style={styles.sessionMeta}>
-                                <Text style={styles.sessionMetaText}>
-                                  {session.durationMin} min
-                                </Text>
-                                {session.style && (
-                                  <>
-                                    <Text style={styles.sessionMetaText}> • </Text>
-                                    <Text style={styles.sessionMetaText}>
-                                      {session.style}
-                                    </Text>
-                                  </>
-                                )}
-                              </View>
-                            </View>
-                            <Ionicons name="play" size={18} color="#6B7280" />
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-
-                      {/* Day Total */}
-                      <View style={styles.dayFooter}>
-                        <Text style={styles.dayTotalText}>
-                          Total: {day.totalDuration} min • {day.sessions.length} sessions
-                        </Text>
-                      </View>
-                    </View>
+                    <DayCard
+                      key={day.dayNumber}
+                      dayNumber={day.dayNumber}
+                      dayTitle={day.theme}
+                      sessions={daySessions}
+                      status={status}
+                      onPlayDay={() => handlePlayDay(day)}
+                      onPlaySession={(sessionIndex) => handlePlaySession(day, sessionIndex)}
+                      showPlayButton={true}
+                    />
                   );
                 })}
               </View>
@@ -554,135 +481,5 @@ const styles = StyleSheet.create({
     fontWeight: "900",
     color: "#111827",
     marginBottom: 12,
-  },
-
-  dayCard: {
-    backgroundColor: "#FFF",
-    borderRadius: 16,
-    padding: 16,
-    marginBottom: 12,
-    ...shadow,
-  },
-
-  dayHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    marginBottom: 12,
-    paddingBottom: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: "rgba(0,0,0,0.05)",
-  },
-
-  dayHeaderLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    flex: 1,
-  },
-
-  dayNumberCircle: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: "#F3F4F6",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 12,
-  },
-
-  dayNumberCircleCompleted: {
-    backgroundColor: "#16A34A",
-  },
-
-  dayNumberCircleCurrent: {
-    backgroundColor: "#E9A46A",
-  },
-
-  dayNumberText: {
-    fontSize: 14,
-    fontWeight: "900",
-    color: "#374151",
-  },
-
-  dayNumberTextCurrent: {
-    color: "#FFF",
-  },
-
-  dayTitle: {
-    fontSize: 16,
-    fontWeight: "800",
-    color: "#111827",
-  },
-
-  dayTheme: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "600",
-    marginTop: 2,
-  },
-
-  playDayBtn: {
-    width: 40,
-    height: 40,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-
-  sessionsList: {
-    gap: 8,
-    marginBottom: 12,
-  },
-
-  sessionRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#F9FAFB",
-    borderRadius: 12,
-    padding: 12,
-  },
-
-  sessionIconCircle: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: "#F0FDF4",
-    alignItems: "center",
-    justifyContent: "center",
-    marginRight: 10,
-  },
-
-  sessionInfo: {
-    flex: 1,
-  },
-
-  sessionTitle: {
-    fontSize: 14,
-    fontWeight: "700",
-    color: "#111827",
-    marginBottom: 2,
-  },
-
-  sessionMeta: {
-    flexDirection: "row",
-    alignItems: "center",
-  },
-
-  sessionMetaText: {
-    fontSize: 12,
-    color: "#6B7280",
-    fontWeight: "600",
-  },
-
-  dayFooter: {
-    paddingTop: 12,
-    borderTopWidth: 1,
-    borderTopColor: "rgba(0,0,0,0.05)",
-  },
-
-  dayTotalText: {
-    fontSize: 13,
-    color: "#6B7280",
-    fontWeight: "700",
-    textAlign: "center",
   },
 });

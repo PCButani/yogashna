@@ -35,6 +35,11 @@ export type RootStackParamList = {
     playlist?: any[]; // NEW: array of sessions for auto-advance
     startIndex?: number; // Which session to start with (default: 0)
     context?: { programId?: string; dayNumber?: number }; // Optional context
+    uri?: string;
+    title?: string;
+    isLocked?: boolean;
+    resumeKey?: string;
+    startPositionSeconds?: number;
   };
   MainTabs: undefined;
   NotificationSettings: undefined;

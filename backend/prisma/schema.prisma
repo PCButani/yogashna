@@ -1,0 +1,277 @@
+// Prisma schema for Yoga & Wellness API
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUMS
+// ============================================
+
+enum AccessLevel {
+  FREE
+  SUBSCRIPTION
+}
+
+enum ProgramSectionType {
+  BENEFIT
+  WHAT_YOU_NEED
+  SAFETY_NOTE
+}
+
+enum VideoPrimaryCategory {
+  YOGA
+  BREATHING
+  MEDITATION
+  KNOWLEDGE
+}
+
+enum VideoLevel {
+  BEGINNER
+  INTERMEDIATE
+  ALL_LEVELS
+}
+
+enum VideoIntensity {
+  LOW
+  MEDIUM
+  HIGH
+}
+
+enum VideoStrengthDemand {
+  VERY_LIGHT
+  LIGHT
+  MODERATE
+  STRONG
+}
+
+enum ContentStatus {
+  ACTIVE
+  INACTIVE
+}
+
+// ============================================
+// MODELS
+// ============================================
+
+model User {
+  id          String    @id @default(uuid()) @db.Uuid
+  firebaseUid String    @unique
+  phone       String?
+  email       String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  lastLoginAt DateTime?
+
+  favoritePrograms UserFavoriteProgram[]
+
+  @@map("users")
+}
+
+model ProgramTemplate {
+  id                      String        @id @default(uuid()) @db.Uuid
+  title                   String
+  sanskritTitle           String?
+  subtitle                String?
+  descriptionShort        String?
+  heroImageR2Key          String?
+  defaultDays             Int
+  defaultMinutesPerDay    Int?
+  levelLabel              String?
+  accessLevel             AccessLevel
+  requiredEntitlementKey  String?
+  status                  ContentStatus
+  version                 Int           @default(1)
+  createdAt               DateTime      @default(now())
+  updatedAt               DateTime      @updatedAt
+
+  sections        ProgramTemplateSection[]
+  days            ProgramDay[]
+  tags            ProgramTemplateTag[]
+  favoritedByUsers UserFavoriteProgram[]
+
+  @@index([status])
+  @@index([accessLevel])
+  @@map("program_templates")
+}
+
+model ProgramTemplateSection {
+  id                String             @id @default(uuid()) @db.Uuid
+  programTemplateId String             @db.Uuid
+  type              ProgramSectionType
+  sortOrder         Int
+  text              String
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+
+  programTemplate ProgramTemplate @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+
+  @@index([programTemplateId, type, sortOrder])
+  @@map("program_template_sections")
+}
+
+model ProgramDay {
+  id                String   @id @default(uuid()) @db.Uuid
+  programTemplateId String   @db.Uuid
+  dayNumber         Int
+  title             String?
+  intent            String?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  programTemplate ProgramTemplate  @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+  items           ProgramDayItem[]
+
+  @@unique([programTemplateId, dayNumber])
+  @@map("program_days")
+}
+
+model ProgramDayItem {
+  id           String   @id @default(uuid()) @db.Uuid
+  programDayId String   @db.Uuid
+  orderIndex   Int
+  videoId      String   @db.Uuid
+  sequenceRole String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  programDay ProgramDay @relation(fields: [programDayId], references: [id], onDelete: Cascade)
+  video      Video      @relation(fields: [videoId], references: [id], onDelete: Restrict)
+
+  @@unique([programDayId, orderIndex])
+  @@index([programDayId])
+  @@map("program_day_items")
+}
+
+model Video {
+  id                     String               @id @default(uuid()) @db.Uuid
+  name                   String
+  descriptionShort       String?
+  primaryCategory        VideoPrimaryCategory
+  durationSec            Int
+  level                  VideoLevel
+  intensity              VideoIntensity
+  strengthDemand         VideoStrengthDemand
+  accessLevel            AccessLevel
+  requiredEntitlementKey String?
+  cloudflareStreamUid    String?
+  thumbnailR2Key         String?
+  status                 ContentStatus
+  version                Int                  @default(1)
+  createdAt              DateTime             @default(now())
+  updatedAt              DateTime             @updatedAt
+
+  tags                 VideoTag[]
+  referencedInDayItems ProgramDayItem[]
+
+  @@index([primaryCategory])
+  @@index([status])
+  @@index([accessLevel])
+  @@map("videos")
+}
+
+model TagType {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags Tag[]
+
+  @@map("tag_types")
+}
+
+model Tag {
+  id        String   @id @default(uuid()) @db.Uuid
+  tagTypeId String   @db.Uuid
+  code      String
+  label     String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tagType      TagType              @relation(fields: [tagTypeId], references: [id], onDelete: Cascade)
+  videoTags    VideoTag[]
+  programTags  ProgramTemplateTag[]
+
+  @@unique([tagTypeId, code])
+  @@index([tagTypeId])
+  @@map("tags")
+}
+
+model VideoTag {
+  id        String   @id @default(uuid()) @db.Uuid
+  videoId   String   @db.Uuid
+  tagId     String   @db.Uuid
+  createdAt DateTime @default(now())
+
+  video Video @relation(fields: [videoId], references: [id], onDelete: Cascade)
+  tag   Tag   @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([videoId, tagId])
+  @@index([videoId])
+  @@index([tagId])
+  @@map("video_tags")
+}
+
+model ProgramTemplateTag {
+  id                String   @id @default(uuid()) @db.Uuid
+  programTemplateId String   @db.Uuid
+  tagId             String   @db.Uuid
+  createdAt         DateTime @default(now())
+
+  programTemplate ProgramTemplate @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+  tag             Tag             @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@unique([programTemplateId, tagId])
+  @@index([programTemplateId])
+  @@index([tagId])
+  @@map("program_template_tags")
+}
+
+model Language {
+  id        String   @id @default(uuid()) @db.Uuid
+  code      String   @unique
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("languages")
+}
+
+model EntityTranslation {
+  id           String   @id @default(uuid()) @db.Uuid
+  entityType   String
+  entityId     String
+  field        String
+  languageCode String
+  value        String
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([entityType, entityId, field, languageCode])
+  @@index([entityType, entityId])
+  @@index([languageCode])
+  @@map("entity_translations")
+}
+
+model UserFavoriteProgram {
+  id                String   @id @default(uuid()) @db.Uuid
+  userId            String   @db.Uuid
+  programTemplateId String   @db.Uuid
+  createdAt         DateTime @default(now())
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programTemplate ProgramTemplate @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, programTemplateId])
+  @@index([userId])
+  @@index([programTemplateId])
+  @@map("user_favorite_programs")
+}
