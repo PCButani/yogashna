@@ -25,11 +25,13 @@ import type { RootStackParamList } from "../../types/navigation";
 
 import {
   getPracticePreferences,
+  mergePreferencesWithUserMe,
   type PracticePreferences,
 } from "../../services/PracticePreferences";
 import { generateTodaysAbhyasa } from "../../services/AbhyasaGenerator";
 import { useProgressStore } from "../../store/useProgressStore";
 import { useContinueWatchingStore } from "../../store/useContinueWatchingStore";
+import { getProfile } from "../../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -78,8 +80,14 @@ export default function TodayScreen() {
   const loadPreferences = async () => {
     try {
       setLoading(true);
+      let userMe = null;
+      try {
+        userMe = await getProfile();
+      } catch (error) {
+        console.warn("Profile fetch failed, using local preferences:", error);
+      }
       const prefs = await getPracticePreferences();
-      setPreferences(prefs);
+      setPreferences(mergePreferencesWithUserMe(prefs, userMe));
     } catch (e) {
       console.warn("Preferences not found yet");
       setPreferences(null);
@@ -288,7 +296,7 @@ export default function TodayScreen() {
             />
             <QuickCard
               title="Breathing"
-              icon="weather-windy"
+              icon="wind"
               color="#5699AA"
               onPress={() => handleQuickStart("Breathing")}
             />

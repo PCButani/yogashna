@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
@@ -6,6 +6,8 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -13,6 +15,8 @@ import {
   useSignupOnboarding,
   PracticeLevel,
 } from "../../data/onboarding/SignupOnboardingContext";
+import { updateProfile } from "../../services/api";
+import { auth } from "../../config/firebase";
 
 type SelectVariant = "grid" | "pill";
 
@@ -23,6 +27,7 @@ type CardProps = {
   selected: boolean;
   onPress: () => void;
   variant?: SelectVariant;
+  disabled?: boolean;
 };
 
 function SelectCard({
@@ -32,15 +37,18 @@ function SelectCard({
   selected,
   onPress,
   variant = "grid",
+  disabled = false,
 }: CardProps) {
   return (
     <TouchableOpacity
       activeOpacity={0.9}
       onPress={onPress}
+      disabled={disabled}
       style={[
         styles.cardBase,
         variant === "grid" ? styles.cardGrid : styles.cardPill,
         selected ? styles.cardSelected : styles.cardUnselected,
+        disabled && styles.cardDisabled,
       ]}
     >
       <View style={styles.cardTopRow}>
@@ -75,8 +83,65 @@ function SelectCard({
 export default function PersonalizePracticeScreen() {
   const navigation = useNavigation<any>();
   const { data, setLevel, setLength, setTime } = useSignupOnboarding();
+  const [loading, setLoading] = useState(false);
 
   const canContinue = !!data.level && !!data.length && !!data.time;
+
+  const handleContinue = async () => {
+    if (!canContinue || loading) return;
+
+    setLoading(true);
+
+    try {
+      // Map UI values to backend format (lowercase)
+      const sessionLength = data.length?.toLowerCase(); // "Quick" → "quick"
+      const preferredTime = data.time?.toLowerCase(); // "Morning" → "morning"
+      const experienceLevel = data.level?.toLowerCase(); // "Beginner" → "beginner"
+
+      // Call backend API
+      await updateProfile({
+        preferences: {
+          sessionLength,
+          preferredTime,
+          experienceLevel,
+        },
+      });
+
+      console.log("✅ Practice preferences saved");
+
+      // Navigate to next screen (PlanSummary)
+      navigation.navigate("PlanSummary");
+    } catch (error: any) {
+      console.error("❌ Failed to save practice preferences:", error);
+
+      // Handle 401 Unauthorized
+      if (error.message?.includes("Unauthorized")) {
+        Alert.alert(
+          "Session Expired",
+          "Your session has expired. Please log in again.",
+          [
+            {
+              text: "OK",
+              onPress: async () => {
+                await auth.signOut();
+                navigation.replace("AuthEntry", { mode: "login" });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Handle other errors
+      Alert.alert(
+        "Connection Error",
+        "Unable to save your preferences. Please check your internet connection and try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -89,7 +154,7 @@ export default function PersonalizePracticeScreen() {
           <View style={styles.header}>
             <Text style={styles.title}>Personalize your practice</Text>
             <Text style={styles.subtitle}>
-              Tell us what feels right for you — we’ll tailor the plan.
+              Tell us what feels right for you — we'll tailor the plan.
             </Text>
           </View>
 
@@ -101,24 +166,27 @@ export default function PersonalizePracticeScreen() {
               subtitle="0–1 year"
               iconName="sparkles-outline"
               selected={data.level === "Beginner"}
-              onPress={() => setLevel("Beginner" as PracticeLevel)}
+              onPress={() => !loading && setLevel("Beginner" as PracticeLevel)}
               variant="grid"
+              disabled={loading}
             />
             <SelectCard
               title="Intermediate"
               subtitle="1–3 years"
               iconName="trending-up-outline"
               selected={data.level === "Intermediate"}
-              onPress={() => setLevel("Intermediate" as PracticeLevel)}
+              onPress={() => !loading && setLevel("Intermediate" as PracticeLevel)}
               variant="grid"
+              disabled={loading}
             />
             <SelectCard
               title="Expert"
               subtitle="3+ years"
               iconName="ribbon-outline"
               selected={data.level === "Expert"}
-              onPress={() => setLevel("Expert" as PracticeLevel)}
+              onPress={() => !loading && setLevel("Expert" as PracticeLevel)}
               variant="grid"
+              disabled={loading}
             />
           </View>
 
@@ -132,24 +200,27 @@ export default function PersonalizePracticeScreen() {
               subtitle="5–7 min"
               iconName="flash-outline"
               selected={data.length === "Quick"}
-              onPress={() => setLength("Quick")}
+              onPress={() => !loading && setLength("Quick")}
               variant="pill"
+              disabled={loading}
             />
             <SelectCard
               title="Balanced"
               subtitle="12–20 min"
               iconName="time-outline"
               selected={data.length === "Balanced"}
-              onPress={() => setLength("Balanced")}
+              onPress={() => !loading && setLength("Balanced")}
               variant="pill"
+              disabled={loading}
             />
             <SelectCard
               title="Deep"
               subtitle="25–30 min"
               iconName="infinite-outline"
               selected={data.length === "Deep"}
-              onPress={() => setLength("Deep")}
+              onPress={() => !loading && setLength("Deep")}
               variant="pill"
+              disabled={loading}
             />
           </View>
 
@@ -163,24 +234,27 @@ export default function PersonalizePracticeScreen() {
               subtitle="6–8 AM"
               iconName="sunny-outline"
               selected={data.time === "Morning"}
-              onPress={() => setTime("Morning")}
+              onPress={() => !loading && setTime("Morning")}
               variant="pill"
+              disabled={loading}
             />
             <SelectCard
               title="Evening"
               subtitle="6–8 PM"
               iconName="moon-outline"
               selected={data.time === "Evening"}
-              onPress={() => setTime("Evening")}
+              onPress={() => !loading && setTime("Evening")}
               variant="pill"
+              disabled={loading}
             />
             <SelectCard
               title="Anytime"
               subtitle="Flexible"
               iconName="calendar-outline"
               selected={data.time === "Anytime"}
-              onPress={() => setTime("Anytime")}
+              onPress={() => !loading && setTime("Anytime")}
               variant="pill"
+              disabled={loading}
             />
           </View>
 
@@ -190,11 +264,15 @@ export default function PersonalizePracticeScreen() {
         {/* CTA */}
         <TouchableOpacity
           activeOpacity={0.9}
-          disabled={!canContinue}
-          style={[styles.cta, !canContinue && styles.ctaDisabled]}
-          onPress={() => navigation.navigate("PlanSummary")}
+          disabled={!canContinue || loading}
+          style={[styles.cta, (!canContinue || loading) && styles.ctaDisabled]}
+          onPress={handleContinue}
         >
-          <Text style={styles.ctaText}>Continue</Text>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.ctaText}>Continue</Text>
+          )}
         </TouchableOpacity>
 
         <View style={{ height: 10 }} />
@@ -268,6 +346,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAF6F0",
     borderColor: "#BFDCCF",
   },
+  cardDisabled: {
+    opacity: 0.6,
+  },
 
   cardTopRow: {
     flexDirection: "row",
@@ -310,7 +391,7 @@ const styles = StyleSheet.create({
   },
 
   cta: {
-    backgroundColor: "#E2B46B", // same saffron as dashboard + focus + goals
+    backgroundColor: "#E2B46B",
     paddingVertical: 14,
     borderRadius: 18,
     alignItems: "center",

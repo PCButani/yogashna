@@ -1,10 +1,12 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ProgramTemplatesService } from './program-templates.service';
 import { AccessLevel, ContentStatus } from '@prisma/client';
 import { ProgramTemplateListResponseDto } from './dto/program-template-list.dto';
 import { ProgramTemplateDetailResponseDto } from './dto/program-template-detail.dto';
+import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 
 @Controller('program-templates')
+@UseGuards(FirebaseAuthGuard)
 export class ProgramTemplatesController {
   constructor(private readonly programTemplatesService: ProgramTemplatesService) {}
 

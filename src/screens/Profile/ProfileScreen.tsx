@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -15,6 +15,10 @@ import { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import { RootStackParamList, MainTabParamList } from "../../types/navigation";
 import { Routes } from "../../constants/routes";
 import { useFavoritesStore } from "../../store/useFavoritesStore";
+import { auth } from "../../config/firebase";
+import { getProfile } from "../../services/api";
+import { UserMe } from "../../types/api";
+import { getWellnessFocusLabel, getWellnessGoalLabel } from "../../constants/wellnessTags";
 
 /**
  * ProfileScreen (Final Locked - TS/Expo Safe)
@@ -32,21 +36,51 @@ type ProfileScreenNavigationProp = CompositeNavigationProp<
   NativeStackNavigationProp<RootStackParamList>
 >;
 
+const formatPreference = (value?: string | null) => {
+  if (!value) return "—";
+  return value
+    .split("_")
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+};
+
 export default function ProfileScreen() {
   const navigation = useNavigation<ProfileScreenNavigationProp>();
+  const [userMe, setUserMe] = useState<UserMe | null>(null);
 
   // ✅ FIXED: Use global favorites store
   const favoritesCount = useFavoritesStore((state) => state.getFavoritesCount());
 
-  // ---- Guest user data (no hardcoding) ----
-  const user = useMemo(
-    () => ({
-      name: "Guest",
-      email: "Sign in to sync your progress",
-      initials: "G",
-    }),
-    []
-  );
+  useEffect(() => {
+    let isMounted = true;
+    const loadProfile = async () => {
+      try {
+        const profile = await getProfile();
+        if (isMounted) setUserMe(profile);
+      } catch (error) {
+        console.warn("Profile load failed:", error);
+      }
+    };
+
+    loadProfile();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const user = useMemo(() => {
+    const name = userMe?.name?.trim() || "Guest";
+    const initials =
+      name
+        .split(" ")
+        .filter(Boolean)
+        .map((part) => part[0])
+        .join("")
+        .slice(0, 2)
+        .toUpperCase() || "G";
+    const email = userMe?.phoneNumber || "Sign in to sync your progress";
+    return { name, email, initials };
+  }, [userMe]);
 
   const [lang, setLang] = useState<Lang>("English");
   const [tab, setTab] = useState<Tab>("Journey");
@@ -61,14 +95,20 @@ export default function ProfileScreen() {
     []
   );
 
-  const practiceFocus = useMemo(
-    () => ({
-      goals: ["Stress Relief", "Better Sleep"],
-      preferredTime: "Morning",
-      sessionLength: "12–20 min",
-    }),
-    []
-  );
+  const practiceFocus = useMemo(() => {
+    const focusLabel = userMe?.wellnessFocusId
+      ? getWellnessFocusLabel(userMe.wellnessFocusId) || "Selected"
+      : null;
+    const goalLabel = userMe?.primaryGoalId
+      ? getWellnessGoalLabel(userMe.primaryGoalId) || "Selected"
+      : null;
+    const goals = [focusLabel, goalLabel].filter(Boolean) as string[];
+    return {
+      goals: goals.length > 0 ? goals : ["—"],
+      preferredTime: formatPreference(userMe?.preferences?.preferredTime),
+      sessionLength: formatPreference(userMe?.preferences?.sessionLength),
+    };
+  }, [userMe]);
 
   const reflection = useMemo(
     () => ({
@@ -108,15 +148,38 @@ export default function ProfileScreen() {
     [stats.sessions, stats.totalTimeHours, stats.streakDays, favoritesCount]
   );
 
-  const personalInfo = useMemo(
-    () => ({
-      age: "25 years",
-      experience: "Advanced",
-      sessionLength: "12–20 min",
-      goals: "Stress Relief, Better Sleep",
-    }),
-    []
-  );
+  const personalInfo = useMemo(() => {
+    const goalLabel = userMe?.primaryGoalId
+      ? getWellnessGoalLabel(userMe.primaryGoalId) || "Selected"
+      : "—";
+    return {
+      age: userMe?.age ? `${userMe.age} years` : "—",
+      experience: formatPreference(userMe?.preferences?.experienceLevel),
+      sessionLength: formatPreference(userMe?.preferences?.sessionLength),
+      goals: goalLabel,
+    };
+  }, [userMe]);
+
+  // ---- DEV-ONLY: Print Firebase Token ----
+  const handlePrintFirebaseToken = async () => {
+    try {
+      const user = auth.currentUser;
+
+      if (!user) {
+        console.log("❌ No user logged in");
+        console.log("ℹ️  Firebase Auth is ready, but no user is authenticated yet.");
+        console.log("ℹ️  Once you implement login, this will print the Firebase ID token.");
+        return;
+      }
+
+      const token = await user.getIdToken(true);
+      console.log("✅ FIREBASE_ID_TOKEN:", token);
+      console.log("✅ Token length:", token.length);
+      console.log("ℹ️  You can now send this token to your backend for authentication.");
+    } catch (error) {
+      console.error("❌ Error getting Firebase token:", error);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -132,9 +195,21 @@ export default function ProfileScreen() {
             style={styles.headerAvatarSmall}
             accessibilityLabel="Profile avatar"
           >
-            <Text style={styles.headerAvatarText}>G</Text>
+            <Text style={styles.headerAvatarText}>{user.initials}</Text>
           </View>
         </View>
+
+        {/* DEV-ONLY: Debug Button for Firebase Token */}
+        {__DEV__ && (
+          <TouchableOpacity
+            style={styles.devButton}
+            onPress={handlePrintFirebaseToken}
+            activeOpacity={0.7}
+          >
+            <Ionicons name="bug-outline" size={16} color="#DC2626" />
+            <Text style={styles.devButtonText}>DEV: Print Firebase Token</Text>
+          </TouchableOpacity>
+        )}
 
         {/* Profile Identity */}
         <View style={styles.profileCard}>
@@ -337,7 +412,7 @@ export default function ProfileScreen() {
               </View>
 
               <Text style={styles.miniNote}>
-                Your yoga journey is not measured by body metrics — it’s measured
+                Your yoga journey is not measured by body metrics — it's measured
                 by consistency and calm. 🌿
               </Text>
             </View>
@@ -556,6 +631,26 @@ const styles = StyleSheet.create({
     justifyContent: "center",
   },
   headerAvatarText: { color: "#FFFFFF", fontWeight: "700" },
+
+  // DEV-ONLY Button Styles
+  devButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#FEE2E2",
+    borderWidth: 1,
+    borderColor: "#DC2626",
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    marginBottom: 12,
+  },
+  devButtonText: {
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: "700",
+    color: "#DC2626",
+  },
 
   profileCard: {
     backgroundColor: "#FFFFFF",

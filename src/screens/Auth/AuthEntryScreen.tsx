@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useMemo, useState, useRef } from "react";
 import {
   View,
   Text,
@@ -7,33 +7,117 @@ import {
   SafeAreaView,
   StatusBar,
   TextInput,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
+import { auth } from "../../config/firebase";
+import { signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
+import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
+import app from "../../config/firebase";
+
+// Store confirmation result globally for OTP verification
+let globalConfirmationResult: ConfirmationResult | null = null;
+
+export function getConfirmationResult() {
+  return globalConfirmationResult;
+}
 
 export default function AuthEntryScreen() {
   const navigation = useNavigation<any>();
   const route = useRoute<any>();
 
-  // mode comes from: navigation.navigate("AuthEntry", { mode: "signup" })
   const mode: "signup" | "login" = route.params?.mode ?? "signup";
 
   const [value, setValue] = useState("");
+  const [loading, setLoading] = useState(false);
   const trimmed = value.trim();
 
-  const isEmail = useMemo(() => trimmed.includes("@"), [trimmed]);
+  // RecaptchaVerifier ref for React Native
+  const recaptchaVerifier = useRef<any>(null);
 
+  const isEmail = useMemo(() => trimmed.includes("@"), [trimmed]);
   const canContinue = trimmed.length >= 3;
 
   const title = mode === "signup" ? "Create your account" : "Welcome back";
   const sub =
     mode === "signup"
-      ? "Enter your mobile number or email to receive an OTP"
-      : "Enter your mobile number or email to log in with OTP";
+      ? "Enter your mobile number to receive an OTP"
+      : "Enter your mobile number to log in with OTP";
+
+  const handleContinue = async () => {
+    if (!canContinue) return;
+
+    // Only support phone numbers for Firebase Auth
+    if (isEmail) {
+      Alert.alert(
+        "Phone Number Required",
+        "Firebase Phone Auth requires a phone number. Email login is not supported yet."
+      );
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Format phone number (ensure it starts with +)
+      let phoneNumber = trimmed;
+      if (!phoneNumber.startsWith("+")) {
+        // Default to India if no country code
+        phoneNumber = "+91" + phoneNumber.replace(/^0+/, "");
+      }
+
+      console.log("📱 Sending OTP to:", phoneNumber);
+
+      if (!recaptchaVerifier.current) {
+        throw new Error("RecaptchaVerifier not initialized");
+      }
+
+      const confirmationResult = await signInWithPhoneNumber(
+        auth,
+        phoneNumber,
+        recaptchaVerifier.current
+      );
+
+      console.log("✅ OTP sent successfully");
+
+      // Store globally for OTP verification screen
+      globalConfirmationResult = confirmationResult;
+
+      navigation.navigate("OtpVerify", {
+        mode,
+        identifier: phoneNumber,
+      });
+    } catch (error: any) {
+      console.error("❌ Phone auth error:", error);
+
+      let errorMessage = "Failed to send OTP. Please try again.";
+
+      if (error.code === "auth/invalid-phone-number") {
+        errorMessage = "Invalid phone number format. Please check and try again.";
+      } else if (error.code === "auth/too-many-requests") {
+        errorMessage = "Too many attempts. Please try again later.";
+      } else if (error.code === "auth/quota-exceeded") {
+        errorMessage = "SMS quota exceeded. Please try again later.";
+      }
+
+      Alert.alert("Error", errorMessage);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
+
+      {/* Firebase reCAPTCHA Modal for React Native */}
+      <FirebaseRecaptchaVerifierModal
+        ref={recaptchaVerifier}
+        firebaseConfig={app.options}
+        attemptInvisibleVerification={true}
+      />
 
       {/* Header */}
       <View style={styles.header}>
@@ -68,34 +152,36 @@ export default function AuthEntryScreen() {
           <TextInput
             value={value}
             onChangeText={setValue}
-            placeholder="Mobile number or email"
+            placeholder="Mobile number (e.g., +919876543210)"
             placeholderTextColor="#9CA3AF"
             autoCapitalize="none"
-            keyboardType={isEmail ? "email-address" : "phone-pad"}
+            keyboardType="phone-pad"
             style={styles.input}
+            editable={!loading}
           />
         </View>
 
         <Text style={styles.hint}>
-          We’ll send a 6-digit OTP to verify your account.
+          We'll send a 6-digit OTP to verify your account.
         </Text>
 
         <TouchableOpacity
           activeOpacity={0.9}
-          disabled={!canContinue}
-          style={[styles.cta, !canContinue && styles.ctaDisabled]}
-          onPress={() =>
-            navigation.navigate("OtpVerify", {
-              mode,
-              identifier: trimmed,
-            })
-          }
+          disabled={!canContinue || loading}
+          style={[styles.cta, (!canContinue || loading) && styles.ctaDisabled]}
+          onPress={handleContinue}
         >
-          <Text style={styles.ctaText}>Continue</Text>
-          <Ionicons name="arrow-forward" size={18} color="#fff" />
+          {loading ? (
+            <ActivityIndicator color="#fff" />
+          ) : (
+            <>
+              <Text style={styles.ctaText}>Continue</Text>
+              <Ionicons name="arrow-forward" size={18} color="#fff" />
+            </>
+          )}
         </TouchableOpacity>
 
-        {/* Small switch line (optional but helpful) */}
+        {/* Small switch line */}
         <TouchableOpacity
           activeOpacity={0.8}
           onPress={() =>
@@ -104,6 +190,7 @@ export default function AuthEntryScreen() {
             })
           }
           style={{ alignSelf: "center", marginTop: 16 }}
+          disabled={loading}
         >
           <Text style={styles.switchText}>
             {mode === "signup"

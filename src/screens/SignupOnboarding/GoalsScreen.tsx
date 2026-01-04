@@ -1,4 +1,4 @@
-import React, { useMemo } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -6,10 +6,15 @@ import {
   StyleSheet,
   SafeAreaView,
   ScrollView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { useSignupOnboarding } from "../../data/onboarding/SignupOnboardingContext";
+import { updateProfile } from "../../services/api";
+import { auth } from "../../config/firebase";
+import { getWellnessGoalCode } from "../../constants/wellnessTags";
 
 const GOALS_BY_FOCUS: Record<string, string[]> = {
   "Health Support": [
@@ -53,6 +58,7 @@ const GOALS_BY_FOCUS: Record<string, string[]> = {
 export default function GoalsScreen() {
   const navigation = useNavigation<any>();
   const { data, toggleGoal } = useSignupOnboarding();
+  const [loading, setLoading] = useState(false);
 
   const goals = useMemo(() => {
     if (!data.focus) return [];
@@ -65,7 +71,7 @@ export default function GoalsScreen() {
   const remaining = Math.max(0, 2 - selectedCount);
 
   const helperText = canContinue
-    ? "Nice choices — you’re on track."
+    ? "Nice choices — you're on track."
     : remaining > 0
     ? `Select ${remaining} more goal${remaining === 1 ? "" : "s"} to continue.`
     : "You can select up to 5 goals.";
@@ -77,20 +83,72 @@ export default function GoalsScreen() {
     : "Max 5 selected";
 
   const handleGoalPress = (goal: string) => {
+    if (loading) return;
+
     const isSelected = data.goals.includes(goal);
     const wouldExceedMax = !isSelected && selectedCount >= 5;
 
     if (wouldExceedMax) {
-      // Don't toggle, just return (button won't respond)
       return;
     }
 
     toggleGoal(goal);
   };
 
-  const onContinue = () => {
-    if (!canContinue) return;
-    navigation.navigate("AboutYou");
+  const onContinue = async () => {
+    if (!canContinue || loading) return;
+
+    setLoading(true);
+
+    try {
+      // Send the FIRST selected goal as the primary goal
+      // TODO (Phase 3+): Persist multi-goal selections once DB supports it.
+      const primaryGoalDisplayName = data.goals[0];
+
+      // Convert display name to tag code (requires wellness focus context)
+      const primaryGoalCode = getWellnessGoalCode(primaryGoalDisplayName, data.focus);
+      if (!primaryGoalCode) {
+        throw new Error("Invalid primary goal selection");
+      }
+
+      await updateProfile({
+        primaryGoalId: primaryGoalCode, // Send tag code (e.g., "reduce_back_pain")
+      });
+
+      console.log("✅ Primary goal saved:", primaryGoalCode);
+
+      // Navigate to next screen
+      navigation.navigate("AboutYou");
+    } catch (error: any) {
+      console.error("❌ Failed to save goal:", error);
+
+      // Handle 401 Unauthorized
+      if (error.message?.includes("Unauthorized")) {
+        Alert.alert(
+          "Session Expired",
+          "Your session has expired. Please log in again.",
+          [
+            {
+              text: "OK",
+              onPress: async () => {
+                await auth.signOut();
+                navigation.replace("AuthEntry", { mode: "login" });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Handle other errors
+      Alert.alert(
+        "Connection Error",
+        "Unable to save your selection. Please check your internet connection and try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -128,7 +186,12 @@ export default function GoalsScreen() {
                 key={g}
                 activeOpacity={0.9}
                 onPress={() => handleGoalPress(g)}
-                style={[styles.goalCard, selected && styles.goalCardSelected]}
+                disabled={loading}
+                style={[
+                  styles.goalCard,
+                  selected && styles.goalCardSelected,
+                  loading && styles.goalCardDisabled,
+                ]}
               >
                 <Text
                   style={[styles.goalText, selected && styles.goalTextSelected]}
@@ -155,11 +218,15 @@ export default function GoalsScreen() {
         {/* CTA */}
         <TouchableOpacity
           activeOpacity={0.9}
-          disabled={!canContinue}
-          style={[styles.cta, !canContinue && styles.ctaDisabled]}
+          disabled={!canContinue || loading}
+          style={[styles.cta, (!canContinue || loading) && styles.ctaDisabled]}
           onPress={onContinue}
         >
-          <Text style={styles.ctaText}>{ctaText}</Text>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.ctaText}>{ctaText}</Text>
+          )}
         </TouchableOpacity>
 
         <View style={{ height: 10 }} />
@@ -230,6 +297,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#EAF6F0",
     borderColor: "#BFDCCF",
   },
+  goalCardDisabled: {
+    opacity: 0.6,
+  },
   goalText: {
     fontSize: 16,
     fontWeight: "800",
@@ -257,7 +327,7 @@ const styles = StyleSheet.create({
   },
 
   cta: {
-    backgroundColor: "#E2B46B", // same saffron tone as dashboard
+    backgroundColor: "#E2B46B",
     paddingVertical: 14,
     borderRadius: 18,
     alignItems: "center",

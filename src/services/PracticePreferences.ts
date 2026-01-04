@@ -5,6 +5,8 @@
  */
 
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { getWellnessFocusLabel, getWellnessGoalLabel } from "../constants/wellnessTags";
+import { UserMe } from "../types/api";
 
 const PREFERENCES_KEY = "YOGA_PRACTICE_PREFERENCES";
 
@@ -29,6 +31,26 @@ export interface PracticePreferences {
   length: SessionLength;
   time: BestTime;
   updatedAt: string; // ISO timestamp
+}
+
+export function mergePreferencesWithUserMe(
+  prefs: PracticePreferences,
+  userMe: UserMe | null
+): PracticePreferences {
+  if (!userMe) return prefs;
+
+  const focusLabel = userMe.wellnessFocusId
+    ? getWellnessFocusLabel(userMe.wellnessFocusId) || prefs.focus
+    : prefs.focus;
+  const goalLabel = userMe.primaryGoalId
+    ? getWellnessGoalLabel(userMe.primaryGoalId)
+    : null;
+
+  return {
+    ...prefs,
+    focus: focusLabel ?? prefs.focus,
+    goals: goalLabel ? [goalLabel] : prefs.goals,
+  };
 }
 
 /**

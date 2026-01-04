@@ -68,6 +68,22 @@ model User {
   updatedAt   DateTime  @updatedAt
   lastLoginAt DateTime?
 
+  // Profile fields
+  name     String?
+  age      Int?
+  gender   String? // "male" | "female" | "other" | "prefer_not_to_say"
+  heightCm Int?
+  weightKg Int?
+
+  // Onboarding selections
+  wellnessFocusId String? // Single wellness focus ID
+  primaryGoalId   String? // Single primary goal ID
+  preferencesJson Json?   // {sessionLength, preferredTime, experienceLevel}
+
+  // Onboarding tracking
+  isOnboardingComplete  Boolean   @default(false)
+  onboardingCompletedAt DateTime?
+
   favoritePrograms UserFavoriteProgram[]
 
   @@map("users")
@@ -188,19 +204,26 @@ model TagType {
 }
 
 model Tag {
-  id        String   @id @default(uuid()) @db.Uuid
-  tagTypeId String   @db.Uuid
-  code      String
-  label     String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid()) @db.Uuid
+  tagTypeId   String   @db.Uuid
+  code        String
+  label       String
+  parentTagId String?  @map("parent_tag_id") @db.Uuid // Optional: for hierarchical relationships (e.g., goals → wellness focus)
+  sortOrder   Int?     @map("sort_order") // Admin-friendly: control display order
+  isActive    Boolean  @default(true) @map("is_active") // Admin-friendly: soft delete / enable-disable
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 
   tagType      TagType              @relation(fields: [tagTypeId], references: [id], onDelete: Cascade)
+  parent       Tag?                 @relation("TagHierarchy", fields: [parentTagId], references: [id], onDelete: SetNull)
+  children     Tag[]                @relation("TagHierarchy")
   videoTags    VideoTag[]
   programTags  ProgramTemplateTag[]
 
   @@unique([tagTypeId, code])
   @@index([tagTypeId])
+  @@index([parentTagId])
+  @@index([isActive])
   @@map("tags")
 }
 

@@ -1,10 +1,12 @@
-import React from "react";
+import React, { useState } from "react";
 import {
   View,
   Text,
   TouchableOpacity,
   StyleSheet,
   SafeAreaView,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { useNavigation } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
@@ -12,6 +14,9 @@ import {
   useSignupOnboarding,
   WellnessFocus,
 } from "../../data/onboarding/SignupOnboardingContext";
+import { updateProfile } from "../../services/api";
+import { auth } from "../../config/firebase";
+import { getWellnessFocusCode } from "../../constants/wellnessTags";
 
 const OPTIONS: {
   key: WellnessFocus;
@@ -60,6 +65,60 @@ const OPTIONS: {
 export default function WellnessFocusScreen() {
   const navigation = useNavigation<any>();
   const { data, setFocus } = useSignupOnboarding();
+  const [loading, setLoading] = useState(false);
+
+  const handleContinue = async () => {
+    if (!data.focus) return;
+
+    setLoading(true);
+
+    try {
+      // Convert display name to tag code
+      const focusCode = getWellnessFocusCode(data.focus);
+      if (!focusCode) {
+        throw new Error("Invalid wellness focus selection");
+      }
+
+      // Call backend API to save wellness focus
+      await updateProfile({
+        wellnessFocusId: focusCode, // Send tag code (e.g., "health_support")
+      });
+
+      console.log("✅ Wellness focus saved:", focusCode);
+
+      // Navigate to next screen
+      navigation.navigate("Goals");
+    } catch (error: any) {
+      console.error("❌ Failed to save wellness focus:", error);
+
+      // Handle 401 Unauthorized
+      if (error.message?.includes("Unauthorized")) {
+        Alert.alert(
+          "Session Expired",
+          "Your session has expired. Please log in again.",
+          [
+            {
+              text: "OK",
+              onPress: async () => {
+                await auth.signOut();
+                navigation.replace("AuthEntry", { mode: "login" });
+              },
+            },
+          ]
+        );
+        return;
+      }
+
+      // Handle other errors
+      Alert.alert(
+        "Connection Error",
+        "Unable to save your selection. Please check your internet connection and try again.",
+        [{ text: "OK" }]
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <SafeAreaView style={styles.safe}>
@@ -78,10 +137,12 @@ export default function WellnessFocusScreen() {
                 key={item.key}
                 activeOpacity={0.9}
                 onPress={() => setFocus(item.key)}
+                disabled={loading}
                 style={[
                   styles.card,
                   { backgroundColor: item.bg },
                   selected && styles.cardSelected,
+                  loading && styles.cardDisabled,
                 ]}
               >
                 <View style={styles.row}>
@@ -121,11 +182,15 @@ export default function WellnessFocusScreen() {
 
         <TouchableOpacity
           activeOpacity={0.9}
-          disabled={!data.focus}
-          style={[styles.cta, !data.focus && styles.ctaDisabled]}
-          onPress={() => navigation.navigate("Goals")}
+          disabled={!data.focus || loading}
+          style={[styles.cta, (!data.focus || loading) && styles.ctaDisabled]}
+          onPress={handleContinue}
         >
-          <Text style={styles.ctaText}>Continue</Text>
+          {loading ? (
+            <ActivityIndicator color="#FFFFFF" />
+          ) : (
+            <Text style={styles.ctaText}>Continue</Text>
+          )}
         </TouchableOpacity>
       </View>
     </SafeAreaView>
@@ -168,6 +233,9 @@ const styles = StyleSheet.create({
   cardSelected: {
     borderColor: "#BFDCCF",
   },
+  cardDisabled: {
+    opacity: 0.6,
+  },
   row: {
     flexDirection: "row",
     alignItems: "center",
@@ -195,7 +263,7 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cta: {
-    backgroundColor: "#E2B46B", // same saffron as dashboard
+    backgroundColor: "#E2B46B",
     paddingVertical: 14,
     borderRadius: 18,
     alignItems: "center",

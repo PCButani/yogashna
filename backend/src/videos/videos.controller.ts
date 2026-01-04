@@ -1,10 +1,12 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { VideosService } from './videos.service';
 import { AccessLevel, ContentStatus, VideoPrimaryCategory } from '@prisma/client';
 import { VideoListResponseDto } from './dto/video-list.dto';
 import { VideoDetailResponseDto } from './dto/video-detail.dto';
+import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 
 @Controller('videos')
+@UseGuards(FirebaseAuthGuard)
 export class VideosController {
   constructor(private readonly videosService: VideosService) {}
 
