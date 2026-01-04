@@ -117,8 +117,14 @@ export default function AboutYouScreen() {
         name: computed.nameTrimmed,
         age: computed.ageN!,
         gender: genderForBackend,
-        height: computed.heightN!,
-        weight: computed.weightN!,
+        height: {
+          unit: "cm",
+          valueCm: Number(heightCm),
+        },
+        weight: {
+          unit: "kg",
+          valueKg: Number(weightKg),
+        },
       });
 
       console.log("✅ AboutYou data saved");

@@ -112,10 +112,18 @@ export async function updateProfile(
     });
 
     if (!response.ok) {
+      let errorText = "";
+      try {
+        errorText = await response.text();
+      } catch {}
+
+      console.error("❌ updateProfile failed:", response.status, errorText);
+
       if (response.status === 401) {
         throw new Error("Unauthorized - Invalid or expired token");
       }
-      throw new Error(`Failed to update profile: ${response.status}`);
+
+      throw new Error(`Failed to update profile: ${response.status} ${errorText}`);
     }
 
     const data: UserProfileResponseDto = await response.json();

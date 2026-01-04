@@ -65,8 +65,18 @@ export interface UpdateProfilePayload {
   name?: string;
   age?: number;
   gender?: string;
-  height?: number;
-  weight?: number;
+  height?: {
+    unit: "cm" | "ft_in";
+    valueCm?: number;
+    feet?: number;
+    inches?: number;
+  };
+
+  weight?: {
+    unit: "kg" | "lbs";
+    valueKg?: number;
+    lbs?: number;
+  };
 
   // WellnessFocus screen
   wellnessFocusId?: string;
