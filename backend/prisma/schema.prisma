@@ -31,6 +31,30 @@ enum VideoPrimaryCategory {
   KNOWLEDGE
 }
 
+// Phase 3A.1: SubCategory enums
+enum YogaSubCategory {
+  WARM_UP
+  MAIN_PRACTICE
+  MOBILITY
+  STRENGTH_STABILITY
+  RESTORATIVE
+  COOL_DOWN
+}
+
+enum BreathingSubCategory {
+  CALMING
+  BALANCING
+  ENERGISING
+}
+
+enum MeditationSubCategory {
+  GUIDED_RELAXATION
+  BREATH_AWARENESS
+  BODY_SCAN
+  MINDFULNESS
+  YOGA_NIDRA_SHORT
+}
+
 enum VideoLevel {
   BEGINNER
   INTERMEDIATE
@@ -53,6 +77,36 @@ enum VideoStrengthDemand {
 enum ContentStatus {
   ACTIVE
   INACTIVE
+}
+
+// Phase 3A.1: New enums
+enum SequenceRole {
+  MANDATORY
+  ADJUSTABLE
+  OPTIONAL
+}
+
+enum DayType {
+  GENTLE
+  BUILD
+  RESTORE
+}
+
+enum EnrollmentStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum SubscriptionTier {
+  FREE
+  PAID
+}
+
+enum EventStatus {
+  PROCESSED
+  IGNORED
+  FAILED
 }
 
 // ============================================
@@ -84,32 +138,52 @@ model User {
   isOnboardingComplete  Boolean   @default(false)
   onboardingCompletedAt DateTime?
 
-  favoritePrograms UserFavoriteProgram[]
+  // Relations
+  favoritePrograms      UserFavoriteProgram[]
+  practicePreferences   PracticePreferences?
+  abhyasaCycles         AbhyasaCycle[]
+  programEnrollments    UserProgramEnrollment[]
+  subscription          UserSubscription?
+  subscriptionEvents    UserSubscriptionEvent[]
 
   @@map("users")
 }
 
 model ProgramTemplate {
-  id                      String        @id @default(uuid()) @db.Uuid
-  title                   String
-  sanskritTitle           String?
-  subtitle                String?
-  descriptionShort        String?
-  heroImageR2Key          String?
-  defaultDays             Int
-  defaultMinutesPerDay    Int?
-  levelLabel              String?
-  accessLevel             AccessLevel
-  requiredEntitlementKey  String?
-  status                  ContentStatus
-  version                 Int           @default(1)
-  createdAt               DateTime      @default(now())
-  updatedAt               DateTime      @updatedAt
+  id                     String        @id @default(uuid()) @db.Uuid
+  title                  String
+  sanskritTitle          String?
+  subtitle               String?
+  descriptionShort       String?
+  heroImageKey           String        // R2 key for hero image
+  defaultDays            Int
+  defaultMinutesPerDay   Int
+  levelLabel             String?
+  accessLevel            AccessLevel
+  requiredEntitlementKey String?
+  status                 ContentStatus
+  version                Int           @default(1)
+  createdAt              DateTime      @default(now())
+  updatedAt              DateTime      @updatedAt
 
-  sections        ProgramTemplateSection[]
-  days            ProgramDay[]
-  tags            ProgramTemplateTag[]
-  favoritedByUsers UserFavoriteProgram[]
+  // Phase 3A.1: Required fields
+  benefits             Json        // Array of benefit strings
+  whatYouNeed          Json?       // Array of what you need strings
+  safetyNotes          Json?       // Array of safety note strings
+  primaryGoal          String      // Primary goal for matching
+  focusArea            String      // Focus area
+  recommendedLevel     VideoLevel  // Recommended level enum
+  categoryRecipe       Json        // e.g., {"Yoga": "Mandatory", "Breathing": "Adjustable", "Meditation": "Optional"}
+  libraryRhythm        Json        // e.g., {"pattern": [6, 1], "types": ["gentle", "restore"]}
+
+  // Relations
+  sections            ProgramTemplateSection[]
+  days                ProgramDay[]
+  tags                ProgramTemplateTag[]
+  favoritedByUsers    UserFavoriteProgram[]
+  librarySchedule     LibraryProgramSchedule?
+  abhyasaCycles       AbhyasaCycle[]
+  enrollments         UserProgramEnrollment[]
 
   @@index([status])
   @@index([accessLevel])
@@ -189,6 +263,187 @@ model Video {
   @@index([status])
   @@index([accessLevel])
   @@map("videos")
+}
+
+// Phase 3A.1: New VideoAsset model (atomic video unit)
+model VideoAsset {
+  id                  String               @id @default(uuid()) @db.Uuid
+  name                String
+  shortDescription    String
+  thumbnailKey        String               // R2 key (not full URL)
+  streamUid           String               // Cloudflare Stream UID (not full URL)
+  primaryCategory     VideoPrimaryCategory
+  yogaSubCategory     YogaSubCategory?
+  breathingSubCategory BreathingSubCategory?
+  meditationSubCategory MeditationSubCategory?
+  level               VideoLevel
+  intensity           VideoIntensity
+  strengthDemand      VideoStrengthDemand
+  focusAreas          Json                 // Array of focus areas
+  goals               Json                 // Array of goals
+  sequenceRole        SequenceRole
+  durationSec         Int
+  caloriesPerMin      Float?
+  contraIndications   Json?                // Optional array of contraindications
+  status              ContentStatus
+  version             String
+  tags                Json?                // Optional array of tag strings
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+
+  // Relations
+  playlistItems       PlaylistItem[]
+
+  @@index([primaryCategory])
+  @@index([status])
+  @@index([sequenceRole])
+  @@map("video_assets")
+}
+
+// Phase 3A.1: LibraryProgramSchedule (cached schedule for ProgramTemplate)
+model LibraryProgramSchedule {
+  id                    String   @id @default(uuid()) @db.Uuid
+  programTemplateId     String   @unique @db.Uuid
+  generatedFromVersion  String?
+  days                  Json     // Array of {dayNumber, dayType, playlist[], totalDurationSec}
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  programTemplate ProgramTemplate @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+
+  @@map("library_program_schedules")
+}
+
+// Phase 3A.1: PracticePreferences (user profile settings)
+model PracticePreferences {
+  userId            String   @id @db.Uuid
+  focusArea         String
+  primaryGoal       String
+  level             VideoLevel
+  minutesPreference Int      // 10, 20, or 30
+  preferredTime     String?  // "morning" or "evening"
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("practice_preferences")
+}
+
+// Phase 3A.1: AbhyasaCycle (user personalized 21-day plan)
+model AbhyasaCycle {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @db.Uuid
+  programTemplateId   String   @db.Uuid
+  startDate           DateTime
+  cycleDays           Int      @default(21)
+  minutesPreference   Int
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programTemplate ProgramTemplate   @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+  dayPlans        AbhyasaDayPlan[]
+
+  @@index([userId])
+  @@index([programTemplateId])
+  @@map("abhyasa_cycles")
+}
+
+// Phase 3A.1: AbhyasaDayPlan (one day inside AbhyasaCycle)
+model AbhyasaDayPlan {
+  id               String   @id @default(uuid()) @db.Uuid
+  abhyasaCycleId   String   @db.Uuid
+  dayNumber        Int
+  dayType          DayType
+  totalDurationSec Int
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  abhyasaCycle  AbhyasaCycle   @relation(fields: [abhyasaCycleId], references: [id], onDelete: Cascade)
+  playlistItems PlaylistItem[]
+
+  @@index([abhyasaCycleId])
+  @@map("abhyasa_day_plans")
+}
+
+// Phase 3A.1: PlaylistItem (one video inside a day playlist)
+model PlaylistItem {
+  id                  String                  @id @default(uuid()) @db.Uuid
+  abhyasaDayPlanId    String?                 @db.Uuid // For Abhyasa day playlists
+  videoAssetId        String                  @db.Uuid
+  primaryCategory     VideoPrimaryCategory
+  yogaSubCategory     YogaSubCategory?
+  breathingSubCategory BreathingSubCategory?
+  meditationSubCategory MeditationSubCategory?
+  sequenceRole        SequenceRole
+  durationSec         Int
+  createdAt           DateTime                @default(now())
+  updatedAt           DateTime                @updatedAt
+
+  abhyasaDayPlan AbhyasaDayPlan? @relation(fields: [abhyasaDayPlanId], references: [id], onDelete: Cascade)
+  videoAsset     VideoAsset      @relation(fields: [videoAssetId], references: [id], onDelete: Restrict)
+
+  @@index([abhyasaDayPlanId])
+  @@index([videoAssetId])
+  @@map("playlist_items")
+}
+
+// Phase 3A.1: UserProgramEnrollment (for subscription gating)
+model UserProgramEnrollment {
+  id                String           @id @default(uuid()) @db.Uuid
+  userId            String           @db.Uuid
+  programTemplateId String           @db.Uuid
+  status            EnrollmentStatus
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
+
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  programTemplate ProgramTemplate @relation(fields: [programTemplateId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, programTemplateId])
+  @@index([userId])
+  @@index([programTemplateId])
+  @@map("user_program_enrollments")
+}
+
+// Phase 3A.1: UserSubscription (for RevenueCat sync)
+model UserSubscription {
+  userId         String            @id @db.Uuid
+  tier           SubscriptionTier
+  entitlement    String            // e.g., "pro"
+  isActive       Boolean
+  expiresAt      DateTime?
+  store          String?
+  productId      String?
+  environment    String?
+  latestEventAt  DateTime?
+  rawRcPayload   Json?             // Raw RevenueCat payload
+  createdAt      DateTime          @default(now())
+  updatedAt      DateTime          @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("user_subscriptions")
+}
+
+// Phase 3A.1: UserSubscriptionEvent (for RevenueCat webhook events)
+model UserSubscriptionEvent {
+  id          String      @id @default(uuid()) @db.Uuid
+  userId      String      @db.Uuid
+  eventType   String
+  occurredAt  DateTime
+  payload     Json
+  status      EventStatus
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([eventType])
+  @@index([occurredAt])
+  @@map("user_subscription_events")
 }
 
 model TagType {

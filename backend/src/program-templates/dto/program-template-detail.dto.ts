@@ -51,7 +51,7 @@ export class ProgramTemplateDetailDto {
   title: string;
   subtitle: string | null;
   descriptionShort: string | null;
-  heroImageR2Key: string | null;
+  heroImageKey: string | null;
   defaultDays: number;
   defaultMinutesPerDay: number | null;
   levelLabel: string | null;
