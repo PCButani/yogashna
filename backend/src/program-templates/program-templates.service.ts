@@ -1,6 +1,13 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { AccessLevel, ContentStatus } from '@prisma/client';
+import {
+  AccessLevel,
+  ContentStatus,
+  DayType,
+  SequenceRole,
+  VideoPrimaryCategory,
+  YogaSubCategory,
+} from '@prisma/client';
 import {
   ProgramTemplateListItemDto,
   ProgramTemplateListResponseDto,
@@ -14,10 +21,24 @@ import {
   ProgramDayItemDto,
   VideoDetailDto,
 } from './dto/program-template-detail.dto';
+import { PlaylistSelectionService } from '../common/playlist/playlist-selection.service';
+import { ProgramTemplateLibraryPlaylistPreviewDto } from './dto/program-template-library-playlist-preview.dto';
+
+type LibraryCandidate = {
+  id: string;
+  sequenceRole: SequenceRole;
+  durationSec: number;
+  primaryCategory: VideoPrimaryCategory;
+  yogaSubCategory: YogaSubCategory | null;
+  createdAt: Date;
+};
 
 @Injectable()
 export class ProgramTemplatesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly playlistSelectionService: PlaylistSelectionService,
+  ) {}
 
   async findAll(
     limit: number = 20,
@@ -348,5 +369,261 @@ export class ProgramTemplatesService {
     };
 
     return { data };
+  }
+
+  async previewLibraryPlaylist(
+    programTemplateId: string,
+    dayNumber: number,
+  ): Promise<ProgramTemplateLibraryPlaylistPreviewDto> {
+    const programTemplate = await this.prisma.programTemplate.findUnique({
+      where: { id: programTemplateId },
+      select: {
+        id: true,
+        defaultMinutesPerDay: true,
+        libraryRhythm: true,
+        recommendedLevel: true,
+      },
+    });
+
+    if (!programTemplate) {
+      throw new NotFoundException(`Program template with id ${programTemplateId} not found`);
+    }
+
+    const targetDurationSec = (programTemplate.defaultMinutesPerDay || 0) * 60;
+    const dayType = this.resolveLibraryDayType(programTemplate.libraryRhythm, dayNumber);
+
+    const candidates = await this.prisma.videoAsset.findMany({
+      where: {
+        status: ContentStatus.ACTIVE,
+        primaryCategory: {
+          in: [VideoPrimaryCategory.YOGA, VideoPrimaryCategory.BREATHING, VideoPrimaryCategory.MEDITATION],
+        },
+        ...(programTemplate.recommendedLevel
+          ? { level: programTemplate.recommendedLevel }
+          : {}),
+      },
+      select: {
+        id: true,
+        sequenceRole: true,
+        durationSec: true,
+        primaryCategory: true,
+        yogaSubCategory: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'asc' },
+    });
+
+    const orderedCandidates = this.sortLibraryCandidates(candidates);
+    const selection = this.generateLibrarySequence(
+      orderedCandidates,
+      targetDurationSec,
+      dayNumber,
+    );
+
+    const playlistItems = selection.items.map((item, index) => ({
+      videoAssetId: item.id,
+      role: item.sequenceRole,
+      durationSec: item.durationSec,
+      order: index + 1,
+    }));
+
+    return {
+      isPreview: true,
+      mode: 'LIBRARY',
+      dayNumber,
+      dayType,
+      targetDurationSec,
+      totalDurationSec: selection.totalDurationSec,
+      playlistItems,
+    };
+  }
+
+  private generateLibrarySequence(
+    candidates: LibraryCandidate[],
+    targetDurationSec: number,
+    dayNumber: number,
+  ): { items: LibraryCandidate[]; totalDurationSec: number } {
+    const history: string[][] = [];
+    let lastSelection: { items: LibraryCandidate[]; totalDurationSec: number } = {
+      items: [],
+      totalDurationSec: 0,
+    };
+
+    for (let currentDay = 1; currentDay <= dayNumber; currentDay += 1) {
+      const exclusion = new Set(history.flat());
+      const available = candidates.filter((item) => !exclusion.has(item.id));
+      lastSelection = this.selectLibraryItems(available, targetDurationSec);
+
+      history.push(lastSelection.items.map((item) => item.id));
+      if (history.length > 5) {
+        history.shift();
+      }
+    }
+
+    return lastSelection;
+  }
+
+  private selectLibraryItems(
+    candidates: LibraryCandidate[],
+    targetDurationSec: number,
+  ): { items: LibraryCandidate[]; totalDurationSec: number } {
+    const yogaCandidates = candidates.filter(
+      (item) => item.primaryCategory === VideoPrimaryCategory.YOGA,
+    );
+
+    const forcedItems: LibraryCandidate[] = [];
+    if (yogaCandidates.length > 0) {
+      const warmup = candidates.find(
+        (item) =>
+          item.primaryCategory === VideoPrimaryCategory.YOGA &&
+          item.yogaSubCategory === YogaSubCategory.WARM_UP,
+      );
+      const cooldown = candidates.find(
+        (item) =>
+          item.primaryCategory === VideoPrimaryCategory.YOGA &&
+          item.yogaSubCategory === YogaSubCategory.COOL_DOWN,
+      );
+
+      if (warmup) {
+        forcedItems.push(warmup);
+      }
+      if (cooldown && (!warmup || cooldown.id !== warmup.id)) {
+        forcedItems.push(cooldown);
+      }
+    }
+
+    const forcedIds = new Set(forcedItems.map((item) => item.id));
+    const remainingCandidates = candidates.filter((item) => !forcedIds.has(item.id));
+    const forcedDuration = forcedItems.reduce((sum, item) => sum + item.durationSec, 0);
+    const remainingTarget = Math.max(0, targetDurationSec - forcedDuration);
+
+    const selection = this.playlistSelectionService.selectByRole(
+      remainingCandidates,
+      remainingTarget,
+    );
+
+    const combinedItems = [...forcedItems, ...selection.items];
+    const totalDurationSec = forcedDuration + selection.totalDurationSec;
+    const orderedItems = this.sortLibraryItems(combinedItems, candidates);
+
+    return {
+      items: orderedItems,
+      totalDurationSec,
+    };
+  }
+
+  private sortLibraryCandidates(candidates: LibraryCandidate[]): LibraryCandidate[] {
+    const ordered = [...candidates];
+    ordered.sort((a, b) => {
+      const bucketA = this.getLibraryBucket(a);
+      const bucketB = this.getLibraryBucket(b);
+      if (bucketA !== bucketB) {
+        return bucketA - bucketB;
+      }
+      return a.createdAt.getTime() - b.createdAt.getTime();
+    });
+    return ordered;
+  }
+
+  private sortLibraryItems(
+    items: LibraryCandidate[],
+    orderedCandidates: LibraryCandidate[],
+  ): LibraryCandidate[] {
+    const roleOrder: Record<SequenceRole, number> = {
+      MANDATORY: 0,
+      ADJUSTABLE: 1,
+      OPTIONAL: 2,
+    };
+
+    const orderMap = new Map<string, number>();
+    orderedCandidates.forEach((candidate, index) => {
+      orderMap.set(candidate.id, index);
+    });
+
+    return [...items].sort((a, b) => {
+      const bucketA = this.getLibraryBucket(a);
+      const bucketB = this.getLibraryBucket(b);
+      if (bucketA !== bucketB) {
+        return bucketA - bucketB;
+      }
+      const roleDiff = roleOrder[a.sequenceRole] - roleOrder[b.sequenceRole];
+      if (roleDiff !== 0) {
+        return roleDiff;
+      }
+      return (orderMap.get(a.id) || 0) - (orderMap.get(b.id) || 0);
+    });
+  }
+
+  private getLibraryBucket(candidate: LibraryCandidate): number {
+    if (candidate.primaryCategory === VideoPrimaryCategory.YOGA) {
+      if (candidate.yogaSubCategory === YogaSubCategory.WARM_UP) {
+        return 1;
+      }
+      if (candidate.yogaSubCategory === YogaSubCategory.COOL_DOWN) {
+        return 3;
+      }
+      return 2;
+    }
+    if (candidate.primaryCategory === VideoPrimaryCategory.BREATHING) {
+      return 4;
+    }
+    if (candidate.primaryCategory === VideoPrimaryCategory.MEDITATION) {
+      return 5;
+    }
+    return 6;
+  }
+
+  private resolveLibraryDayType(libraryRhythm: any, dayNumber: number): DayType {
+    const rhythmDayType = this.resolveRhythmDayType(libraryRhythm, dayNumber);
+    const dayType =
+      rhythmDayType || (dayNumber % 7 === 0 ? DayType.RESTORE : DayType.GENTLE);
+    return dayType === DayType.BUILD ? DayType.GENTLE : dayType;
+  }
+
+  private resolveRhythmDayType(libraryRhythm: any, dayNumber: number): DayType | null {
+    if (!libraryRhythm || typeof libraryRhythm !== 'object') {
+      return null;
+    }
+
+    const pattern = Array.isArray(libraryRhythm.pattern) ? libraryRhythm.pattern : null;
+    const types = Array.isArray(libraryRhythm.types) ? libraryRhythm.types : null;
+
+    if (!pattern || !types || pattern.length === 0 || pattern.length !== types.length) {
+      return null;
+    }
+
+    const cycle: DayType[] = [];
+    for (let i = 0; i < pattern.length; i += 1) {
+      const count = Number(pattern[i]);
+      const type = this.normalizeDayType(types[i]);
+      if (!type || !Number.isFinite(count) || count <= 0) {
+        return null;
+      }
+      for (let j = 0; j < Math.floor(count); j += 1) {
+        cycle.push(type);
+      }
+    }
+
+    if (cycle.length === 0) {
+      return null;
+    }
+
+    return cycle[(dayNumber - 1) % cycle.length];
+  }
+
+  private normalizeDayType(value: unknown): DayType | null {
+    if (typeof value !== 'string') {
+      return null;
+    }
+    switch (value.trim().toLowerCase()) {
+      case 'gentle':
+        return DayType.GENTLE;
+      case 'build':
+        return DayType.BUILD;
+      case 'restore':
+        return DayType.RESTORE;
+      default:
+        return null;
+    }
   }
 }

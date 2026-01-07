@@ -1,9 +1,10 @@
-import { Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
+import { BadRequestException, Controller, Get, Param, Query, UseGuards } from '@nestjs/common';
 import { ProgramTemplatesService } from './program-templates.service';
 import { AccessLevel, ContentStatus } from '@prisma/client';
 import { ProgramTemplateListResponseDto } from './dto/program-template-list.dto';
 import { ProgramTemplateDetailResponseDto } from './dto/program-template-detail.dto';
 import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
+import { ProgramTemplateLibraryPlaylistPreviewDto } from './dto/program-template-library-playlist-preview.dto';
 
 @Controller('program-templates')
 @UseGuards(FirebaseAuthGuard)
@@ -72,5 +73,18 @@ export class ProgramTemplatesController {
     const effectiveLang = lang || 'en';
 
     return this.programTemplatesService.findOne(id, effectiveStatus, effectiveLang);
+  }
+
+  @Get(':programTemplateId/library/days/:dayNumber/playlist/preview')
+  async previewLibraryPlaylist(
+    @Param('programTemplateId') programTemplateId: string,
+    @Param('dayNumber') dayNumberStr: string,
+  ): Promise<ProgramTemplateLibraryPlaylistPreviewDto> {
+    const dayNumber = parseInt(dayNumberStr, 10);
+    if (Number.isNaN(dayNumber) || dayNumber <= 0) {
+      throw new BadRequestException('dayNumber must be a positive integer');
+    }
+
+    return this.programTemplatesService.previewLibraryPlaylist(programTemplateId, dayNumber);
   }
 }

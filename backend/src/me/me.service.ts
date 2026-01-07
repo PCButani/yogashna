@@ -1,11 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
-import { SubscriptionTier } from '@prisma/client';
 import { CapabilitiesDto } from './dto/capabilities.dto';
+import { SubscriptionPolicyService } from './subscription-policy.service';
 
 @Injectable()
 export class MeService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly subscriptionPolicyService: SubscriptionPolicyService,
+  ) {}
 
   async getCapabilities(firebaseUid: string): Promise<CapabilitiesDto> {
     // Find or create user
@@ -24,29 +27,24 @@ export class MeService {
 
     const userId = user.id;
 
-    // Get subscription
-    const subscription = await this.prisma.userSubscription.findUnique({
-      where: { userId },
-    });
-
-    // Determine tier and active status
-    let tier: 'FREE' | 'PAID' = 'FREE';
-    let isPaidActive = false;
-    let entitlement: string | null = null;
-
-    if (subscription && subscription.isActive && subscription.tier === SubscriptionTier.PAID) {
-      tier = 'PAID';
-      isPaidActive = true;
-      entitlement = subscription.entitlement;
-    }
+    const subscriptionPolicy = await this.subscriptionPolicyService.getPolicyByUserId(userId);
+    const tier = subscriptionPolicy.tier;
+    const isPaidActive = subscriptionPolicy.isPaidActive;
+    const entitlement = subscriptionPolicy.entitlement;
+    const subscriptionSource = subscriptionPolicy.subscriptionSource;
 
     // Determine enrollment limit
-    const programEnrollmentLimit = tier === 'PAID' ? 5 : 1;
+    const programEnrollmentLimit = subscriptionPolicy.maxActivePrograms;
+    const freeUnlockDays = subscriptionPolicy.freeUnlockDays;
 
-    // Count enrolled programs (ALL statuses)
-    const enrolledProgramsCount = await this.prisma.userProgramEnrollment.count({
-      where: { userId },
-    });
+    // Count active enrollments
+    const enrolledProgramsCount = await this.subscriptionPolicyService.countActiveEnrollments(
+      userId
+    );
+
+    const activeAbhyasaCount = enrolledProgramsCount;
+
+    const remainingAbhyasaSlots = Math.max(0, programEnrollmentLimit - activeAbhyasaCount);
 
     // Determine if can enroll
     const canEnrollNewProgram = enrolledProgramsCount < programEnrollmentLimit;
@@ -65,6 +63,19 @@ export class MeService {
       enrolledProgramsCount,
       canEnrollNewProgram,
       reasons,
+      subscription: {
+        isActive: isPaidActive,
+        plan: tier,
+        source: subscriptionSource,
+      },
+      abhyasa: {
+        maxActivePrograms: programEnrollmentLimit,
+        freeUnlockDays,
+      },
+      usage: {
+        activeAbhyasaCount,
+        remainingAbhyasaSlots,
+      },
     };
   }
 }

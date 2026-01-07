@@ -1,8 +1,9 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Get, Param, Post, Query, UseGuards } from '@nestjs/common';
 import { ProgramTemplatesV1Service } from './program-templates-v1.service';
 import { AccessLevel, ContentStatus } from '@prisma/client';
 import { ProgramTemplateListResponseDto } from './dto/program-template-list.dto';
-import { ProgramTemplateDetailDto } from './dto/program-template-detail.dto';
+import { ProgramTemplateDetailDto, LibraryScheduleDto } from './dto/program-template-detail.dto';
+import { FirebaseAuthGuard } from '../auth/guards/firebase-auth.guard';
 
 @Controller('programs')
 export class ProgramTemplatesV1Controller {
@@ -19,5 +20,11 @@ export class ProgramTemplatesV1Controller {
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<ProgramTemplateDetailDto> {
     return this.programTemplatesV1Service.findOne(id);
+  }
+
+  @Post(':id/library-schedule/regenerate')
+  @UseGuards(FirebaseAuthGuard)
+  async regenerateLibrarySchedule(@Param('id') id: string): Promise<LibraryScheduleDto> {
+    return this.programTemplatesV1Service.regenerateLibrarySchedule(id);
   }
 }
