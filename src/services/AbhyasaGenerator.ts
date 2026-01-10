@@ -7,18 +7,6 @@
 import type { PracticePreferences } from "./PracticePreferences";
 import type { AbhyasaPlaylistItem } from "../data/models/ProgramTemplate";
 
-// Sample video URLs for testing playlist functionality
-// Each video has a distinct URL to ensure proper player key updates on Android
-const WARMUP_VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-const MAIN_VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4";
-const COOLDOWN_VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/ForBiggerBlazes.mp4";
-
-// Fallback video URL
-const VIDEO_URL = WARMUP_VIDEO_URL;
-
 /**
  * Generate today's Abhyāsa playlist based on user preferences
  * Returns an array of sessions in sequence: warm-up → main → cool-down
@@ -46,7 +34,7 @@ export function generateTodaysAbhyasa(preferences: PracticePreferences): Abhyasa
     durationMin: warmupMin,
     style: "Hatha",
     focusTags: ["Gentle Movement", "Joint Mobility", "Breath Awareness"],
-    videoUrl: WARMUP_VIDEO_URL,
+    videoUrl: "",
     sequenceType: "warmup",
   });
 
@@ -58,7 +46,7 @@ export function generateTodaysAbhyasa(preferences: PracticePreferences): Abhyasa
     durationMin: mainMin,
     style: getMainPracticeStyle(level),
     focusTags: getMainPracticeTags(focus, primaryGoal),
-    videoUrl: MAIN_VIDEO_URL,
+    videoUrl: "",
     sequenceType: "main",
   });
 
@@ -70,21 +58,11 @@ export function generateTodaysAbhyasa(preferences: PracticePreferences): Abhyasa
     durationMin: cooldownMin,
     style: "Restorative",
     focusTags: ["Deep Relaxation", "Breath Work", "Stillness"],
-    videoUrl: COOLDOWN_VIDEO_URL,
+    videoUrl: "",
     sequenceType: "cooldown",
   });
 
-  return sessions
-    .map((session) => ({
-      ...session,
-      videoUrl: ensureValidVideoUrl(session.videoUrl),
-    }))
-    .filter((session) => !!session.videoUrl);
-}
-
-function ensureValidVideoUrl(url?: string): string {
-  const trimmed = url?.trim();
-  return trimmed ? trimmed : VIDEO_URL;
+  return sessions;
 }
 
 /**

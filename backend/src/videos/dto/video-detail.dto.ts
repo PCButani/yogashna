@@ -25,6 +25,10 @@ export class VideoDetailDto {
   status: ContentStatus;
   version: number;
   tags: TagResponseDto[];
+
+  // Generated URLs (not stored in DB)
+  playbackUrl: string | null;
+  thumbnailUrl: string | null;
 }
 
 export class VideoDetailResponseDto {

@@ -8,9 +8,10 @@ import { SubscriptionPolicyService } from './subscription-policy.service';
 import { ProgramEnrollmentsController } from './program-enrollments.controller';
 import { ProgramEnrollmentsService } from './program-enrollments.service';
 import { PlaylistSelectionService } from '../common/playlist/playlist-selection.service';
+import { AssetsModule } from '../assets/assets.module';
 
 @Module({
-  imports: [AuthModule],
+  imports: [AuthModule, AssetsModule],
   controllers: [MeController, AbhyasaCycleController, ProgramEnrollmentsController],
   providers: [
     MeService,

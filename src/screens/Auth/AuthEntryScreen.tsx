@@ -1,4 +1,4 @@
-import React, { useMemo, useState, useRef } from "react";
+import React, { useMemo, useState } from "react";
 import {
   View,
   Text,
@@ -12,13 +12,11 @@ import {
 } from "react-native";
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
-import { auth } from "../../config/firebase";
-import { signInWithPhoneNumber, ConfirmationResult } from "firebase/auth";
-import { FirebaseRecaptchaVerifierModal } from "expo-firebase-recaptcha";
-import app from "../../config/firebase";
+import auth from "@react-native-firebase/auth";
+import type { FirebaseAuthTypes } from "@react-native-firebase/auth";
 
 // Store confirmation result globally for OTP verification
-let globalConfirmationResult: ConfirmationResult | null = null;
+let globalConfirmationResult: FirebaseAuthTypes.ConfirmationResult | null = null;
 
 export function getConfirmationResult() {
   return globalConfirmationResult;
@@ -33,9 +31,6 @@ export default function AuthEntryScreen() {
   const [value, setValue] = useState("");
   const [loading, setLoading] = useState(false);
   const trimmed = value.trim();
-
-  // RecaptchaVerifier ref for React Native
-  const recaptchaVerifier = useRef<any>(null);
 
   const isEmail = useMemo(() => trimmed.includes("@"), [trimmed]);
   const canContinue = trimmed.length >= 3;
@@ -70,15 +65,8 @@ export default function AuthEntryScreen() {
 
       console.log("📱 Sending OTP to:", phoneNumber);
 
-      if (!recaptchaVerifier.current) {
-        throw new Error("RecaptchaVerifier not initialized");
-      }
-
-      const confirmationResult = await signInWithPhoneNumber(
-        auth,
-        phoneNumber,
-        recaptchaVerifier.current
-      );
+      // Native Firebase - no reCAPTCHA needed!
+      const confirmationResult = await auth().signInWithPhoneNumber(phoneNumber);
 
       console.log("✅ OTP sent successfully");
 
@@ -111,13 +99,6 @@ export default function AuthEntryScreen() {
   return (
     <SafeAreaView style={styles.safe}>
       <StatusBar barStyle="dark-content" />
-
-      {/* Firebase reCAPTCHA Modal for React Native */}
-      <FirebaseRecaptchaVerifierModal
-        ref={recaptchaVerifier}
-        firebaseConfig={app.options}
-        attemptInvisibleVerification={true}
-      />
 
       {/* Header */}
       <View style={styles.header}>

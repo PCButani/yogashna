@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import {
   SafeAreaView,
   View,
@@ -17,6 +17,7 @@ import { useFavoritesStore } from "../../store/useFavoritesStore";
 import { useProgressStore } from "../../store/useProgressStore";
 import ContraindicationsModal from "../../components/safety/ContraindicationsModal";
 import { hasSafetyAcknowledgment, saveSafetyAcknowledgment } from "../../utils/safetyAck";
+import { getVideos } from "../../services/api";
 
 export default function ProgramDetailScreen() {
   const navigation = useNavigation<any>();
@@ -31,6 +32,9 @@ export default function ProgramDetailScreen() {
   // Modal state
   const [showSafetyModal, setShowSafetyModal] = useState(false);
   const [pendingAction, setPendingAction] = useState<(() => void) | null>(null);
+  const [videosById, setVideosById] = useState<
+    Record<string, { playbackUrl?: string; thumbnailUrl?: string }>
+  >({});
 
   // Load ProgramTemplate (master content) and Schedule (day/session data)
   const programTemplate = getProgramTemplateById(programId);
@@ -63,6 +67,54 @@ export default function ProgramDetailScreen() {
     if (!schedule) return null;
     return schedule.days.find((d) => d.state === "current");
   }, [schedule]);
+
+  useEffect(() => {
+    let isMounted = true;
+
+    const loadVideos = async () => {
+      try {
+        const response = await getVideos({ status: "ACTIVE", limit: 200 });
+        if (!isMounted) return;
+
+        const map: Record<string, { playbackUrl?: string; thumbnailUrl?: string }> = {};
+        (response.data || []).forEach((video: any) => {
+          map[video.id] = {
+            playbackUrl: video.playbackUrl,
+            thumbnailUrl: video.thumbnailUrl,
+          };
+        });
+
+        setVideosById(map);
+        console.log("ProgramDetail loaded videos:", response.data?.length || 0);
+      } catch {
+        if (!isMounted) return;
+        setVideosById({});
+      }
+    };
+
+    loadVideos();
+
+    return () => {
+      isMounted = false;
+    };
+  }, []);
+
+  const getPlaybackUrl = (session: ScheduleSession) => {
+    if (!session.videoId) return undefined;
+    return videosById[session.videoId]?.playbackUrl;
+  };
+
+  const getThumbnailUrl = (session: ScheduleSession) => {
+    if (!session.videoId) return undefined;
+    return videosById[session.videoId]?.thumbnailUrl;
+  };
+
+  const buildPlaylist = (day: ScheduleDay) =>
+    day.sessions.map((session) => ({
+      ...session,
+      videoUrl: getPlaybackUrl(session) || "",
+      thumbnailUrl: getThumbnailUrl(session),
+    }));
 
   // Check if program requires safety acknowledgment
   const requiresSafetyCheck = useMemo(() => {
@@ -124,16 +176,18 @@ export default function ProgramDetailScreen() {
 
   // ✅ FIXED: Direct navigation functions without safety check
   const navigateToPlayDay = (day: ScheduleDay) => {
+    const playlist = buildPlaylist(day);
     navigation.navigate(Routes.COMMON_PLAYER, {
-      playlist: day.sessions,
+      playlist,
       startIndex: 0,
       context: { programId, dayNumber: day.dayNumber },
     });
   };
 
   const navigateToPlaySession = (day: ScheduleDay, sessionIndex: number) => {
+    const playlist = buildPlaylist(day);
     navigation.navigate(Routes.COMMON_PLAYER, {
-      playlist: day.sessions,
+      playlist,
       startIndex: sessionIndex,
       context: { programId, dayNumber: day.dayNumber },
     });
@@ -141,15 +195,26 @@ export default function ProgramDetailScreen() {
 
   // ✅ FIXED: Wrapped handlers that include safety check
   const handlePlayDay = (day: ScheduleDay) => {
+    const hasMissing = day.sessions.some((session) => !getPlaybackUrl(session));
+    if (hasMissing) return;
     performSafetyCheck(() => navigateToPlayDay(day));
   };
 
   const handlePlaySession = (day: ScheduleDay, sessionIndex: number) => {
+    const session = day.sessions[sessionIndex];
+    const playbackUrl = getPlaybackUrl(session);
+    console.log("ProgramDetail session tap:", {
+      sessionId: session.id,
+      playbackUrl: playbackUrl || "missing",
+    });
+    if (!playbackUrl) return;
     performSafetyCheck(() => navigateToPlaySession(day, sessionIndex));
   };
 
   const handleStartContinue = () => {
     if (!currentDay) return;
+    const hasMissing = currentDay.sessions.some((session) => !getPlaybackUrl(session));
+    if (hasMissing) return;
     performSafetyCheck(() => navigateToPlayDay(currentDay));
   };
 
@@ -330,6 +395,7 @@ export default function ProgramDetailScreen() {
                 day={day}
                 programId={programId}
                 isSessionCompleted={isSessionCompleted}
+                getPlaybackUrl={getPlaybackUrl}
                 onPlayDay={() => handlePlayDay(day)}
                 onPlaySession={(sessionIndex) => handlePlaySession(day, sessionIndex)}
               />
@@ -360,12 +426,14 @@ function DayCard({
   day,
   programId,
   isSessionCompleted,
+  getPlaybackUrl,
   onPlayDay,
   onPlaySession,
 }: {
   day: ScheduleDay;
   programId: string;
   isSessionCompleted: (sessionId: { programId?: string; dayId?: string; videoId: string }) => boolean;
+  getPlaybackUrl: (session: ScheduleSession) => string | undefined;
   onPlayDay: () => void;
   onPlaySession: (sessionIndex: number) => void;
 }) {
@@ -388,7 +456,8 @@ function DayCard({
   const isLocked = state === "locked";
   const isCurrent = state === "current";
 
-  const canPlay = isCurrent || isFullyCompleted || isPartiallyCompleted;
+  const hasMissingVideos = sessions.some((session) => !getPlaybackUrl(session));
+  const canPlay = (isCurrent || isFullyCompleted || isPartiallyCompleted) && !hasMissingVideos;
 
   const totalDuration = sessions.reduce((sum, s) => sum + s.durationMin, 0);
 
@@ -446,6 +515,8 @@ function DayCard({
             dayId: dayNumber.toString(),
             videoId: session.id,
           });
+          const playbackUrl = getPlaybackUrl(session);
+          const isUnavailable = !playbackUrl;
 
           return (
             <TouchableOpacity
@@ -453,16 +524,23 @@ function DayCard({
               style={[
                 styles.sessionTile,
                 sessionCompleted && styles.sessionTileCompleted,
+                isUnavailable && styles.sessionTileUnavailable,
               ]}
               onPress={() => onPlaySession(idx)}
-              disabled={isLocked}
+              disabled={isLocked || isUnavailable}
               activeOpacity={0.7}
             >
               <View style={styles.sessionIcon}>
                 <Ionicons
                   name={sessionCompleted ? "checkmark-circle" : "play-circle-outline"}
                   size={20}
-                  color={isLocked ? "#D1D5DB" : sessionCompleted ? "#2E6B4F" : "#2E6B4F"}
+                  color={
+                    isLocked || isUnavailable
+                      ? "#D1D5DB"
+                      : sessionCompleted
+                      ? "#2E6B4F"
+                      : "#2E6B4F"
+                  }
                 />
               </View>
               <View style={styles.sessionInfo}>
@@ -474,8 +552,15 @@ function DayCard({
                   <View style={styles.sessionDot} />
                   <Text style={styles.sessionMetaText}>{session.style}</Text>
                 </View>
+                {isUnavailable && (
+                  <Text style={styles.sessionUnavailable}>Video unavailable</Text>
+                )}
               </View>
-              <Ionicons name="chevron-forward" size={18} color={isLocked ? "#D1D5DB" : "#9CA3AF"} />
+              <Ionicons
+                name="chevron-forward"
+                size={18}
+                color={isLocked || isUnavailable ? "#D1D5DB" : "#9CA3AF"}
+              />
             </TouchableOpacity>
           );
         })}
@@ -837,6 +922,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F9F5",
     borderColor: "#C6E7D3",
   },
+  sessionTileUnavailable: {
+    opacity: 0.6,
+  },
   sessionIcon: {
     marginRight: 10,
   },
@@ -860,6 +948,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     fontWeight: "600",
+  },
+  sessionUnavailable: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#DC2626",
   },
   sessionDot: {
     width: 3,

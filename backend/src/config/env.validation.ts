@@ -12,6 +12,6 @@ export const envValidationSchema = Joi.object({
   FIREBASE_CLIENT_EMAIL: Joi.string().required(),
   FIREBASE_PRIVATE_KEY: Joi.string().required(),
 
-  CLOUDFLARE_R2_PUBLIC_BASE_URL: Joi.string().uri().required(),
+  CLOUDFLARE_R2_PUBLIC_BASE_URL: Joi.string().uri({ scheme: ['https'] }).required(),
   CLOUDFLARE_STREAM_CUSTOMER_SUBDOMAIN: Joi.string().min(3).required(),
 }).unknown(true);

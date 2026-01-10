@@ -37,6 +37,7 @@ export interface AbhyasaPlaylistItem {
   style: string;
   focusTags: string[];
   videoUrl: string;
+  thumbnailUrl?: string | null;
   sequenceType?: "warmup" | "main" | "cooldown"; // Optional sequence indicator
 }
 

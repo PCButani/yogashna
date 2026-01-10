@@ -4,7 +4,7 @@
  * Play individual videos (not counted as Abhyāsa completion)
  */
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import {
   View,
   Text,
@@ -16,6 +16,7 @@ import {
   Platform,
   StatusBar,
   Dimensions,
+  ActivityIndicator,
 } from "react-native";
 import { Ionicons } from "@expo/vector-icons";
 import { useNavigation, useRoute } from "@react-navigation/native";
@@ -24,6 +25,7 @@ import type { RouteProp } from "@react-navigation/native";
 import type { RootStackParamList } from "../../types/navigation";
 import { Routes } from "../../constants/routes";
 import type { Session } from "../../data/mock/models";
+import { getVideos } from "../../services/api";
 
 const { width } = Dimensions.get("window");
 
@@ -32,121 +34,8 @@ type VideoLibraryRouteProp = RouteProp<RootStackParamList, "VideoLibrary">;
 
 type FilterType = "All" | "Yoga" | "Breathing" | "Meditation";
 
-// Sample video URL
-const VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
 const THUMBNAIL =
   "https://images.unsplash.com/photo-1545205597-3d9d02c29597?auto=format&fit=crop&w=800&q=80";
-
-// Mock video library data - replace with actual data later
-const MOCK_VIDEOS: Session[] = [
-  // Yoga
-  {
-    id: "lib-yoga-1",
-    title: "Morning Sun Salutation Flow",
-    durationMin: 20,
-    style: "Vinyasa",
-    focusTags: ["Energy", "Full Body", "Morning"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-yoga-2",
-    title: "Gentle Hatha for Back Pain",
-    durationMin: 25,
-    style: "Hatha",
-    focusTags: ["Back Care", "Therapeutic", "Gentle"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-yoga-3",
-    title: "Evening Restorative Yoga",
-    durationMin: 30,
-    style: "Restorative",
-    focusTags: ["Relaxation", "Sleep Support", "Evening"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-yoga-4",
-    title: "Core Strength Vinyasa",
-    durationMin: 15,
-    style: "Vinyasa",
-    focusTags: ["Core", "Strength", "Dynamic"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-yoga-5",
-    title: "Hip Opening Flow",
-    durationMin: 20,
-    style: "Hatha",
-    focusTags: ["Flexibility", "Hips", "Seated"],
-    videoUrl: VIDEO_URL,
-  },
-
-  // Breathing
-  {
-    id: "lib-breathing-1",
-    title: "Box Breathing for Calm",
-    sanskritTitle: "Sama Vritti Prāṇāyāma",
-    durationMin: 5,
-    style: "Pranayama",
-    focusTags: ["Stress Relief", "Quick", "Calming"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-breathing-2",
-    title: "Alternate Nostril Breathing",
-    sanskritTitle: "Nadi Shodhana",
-    durationMin: 10,
-    style: "Pranayama",
-    focusTags: ["Balance", "Focus", "Traditional"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-breathing-3",
-    title: "Energizing Breath of Fire",
-    sanskritTitle: "Kapalabhati",
-    durationMin: 7,
-    style: "Pranayama",
-    focusTags: ["Energy", "Cleansing", "Advanced"],
-    videoUrl: VIDEO_URL,
-  },
-
-  // Meditation
-  {
-    id: "lib-meditation-1",
-    title: "Morning Mindfulness Meditation",
-    durationMin: 10,
-    style: "Meditation",
-    focusTags: ["Mindfulness", "Morning", "Beginner"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-meditation-2",
-    title: "Body Scan for Deep Relaxation",
-    durationMin: 15,
-    style: "Meditation",
-    focusTags: ["Relaxation", "Body Awareness", "Sleep"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-meditation-3",
-    title: "Loving-Kindness Meditation",
-    sanskritTitle: "Metta Bhāvanā",
-    durationMin: 12,
-    style: "Meditation",
-    focusTags: ["Compassion", "Heart Opening", "Traditional"],
-    videoUrl: VIDEO_URL,
-  },
-  {
-    id: "lib-meditation-4",
-    title: "Yoga Nidra - Deep Rest",
-    durationMin: 20,
-    style: "Meditation",
-    focusTags: ["Deep Rest", "Healing", "Guided"],
-    videoUrl: VIDEO_URL,
-  },
-];
 
 const shadow = Platform.select({
   android: { elevation: 2 },
@@ -165,23 +54,72 @@ export default function VideoLibraryScreen() {
 
   const initialFilter = route.params?.filter || "All";
   const [selectedFilter, setSelectedFilter] = useState<FilterType>(initialFilter);
+  const [videos, setVideos] = useState<Session[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  const fetchVideos = async () => {
+    try {
+      setLoading(true);
+      const response = await getVideos({ limit: 50, status: "ACTIVE" });
+
+      // Map backend VideoListItemDto to Session type
+      const mappedVideos: Session[] = (response.data || []).map((v: any) => ({
+        id: v.id,
+        title: v.name || v.title || v.descriptionShort || "Yoga Session",
+        durationMin: Math.max(1, Math.round((v.durationSec || 300) / 60)),
+        style: v.primaryCategory || "Yoga",
+        focusTags: v.tags?.map((t: any) => t.label || t.name).filter(Boolean) || [],
+        videoUrl: v.playbackUrl ?? "",
+        thumbnailUrl: v.thumbnailUrl,
+      }));
+
+      setVideos(mappedVideos);
+      setError(null);
+      if (mappedVideos.length > 0) {
+        console.log("✅ VideoLibrary first item URLs:", {
+          playbackUrl: mappedVideos[0].videoUrl,
+          thumbnailUrl: (mappedVideos[0] as any).thumbnailUrl,
+        });
+      }
+    } catch (err) {
+      console.error("❌ VideoLibrary load failed:", err);
+      setError("Failed to load videos. Check backend + login.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch videos from backend on mount
+  useEffect(() => {
+    fetchVideos();
+  }, []);
 
   const filteredVideos = useMemo(() => {
-    if (selectedFilter === "All") return MOCK_VIDEOS;
+    if (selectedFilter === "All") return videos;
 
-    return MOCK_VIDEOS.filter((video) => {
+    return videos.filter((video) => {
+      const style = (video.style || "").toUpperCase();
       if (selectedFilter === "Yoga") {
-        return ["Vinyasa", "Hatha", "Restorative"].includes(video.style || "");
+        return ["VINYASA", "HATHA", "RESTORATIVE", "YOGA", "YIN", "MOBILITY"].includes(style);
       } else if (selectedFilter === "Breathing") {
-        return video.style === "Pranayama";
+        return style === "PRANAYAMA" || style === "BREATHING";
       } else if (selectedFilter === "Meditation") {
-        return video.style === "Meditation";
+        return style === "MEDITATION";
       }
       return false;
     });
-  }, [selectedFilter]);
+  }, [selectedFilter, videos]);
 
   const handlePlayVideo = (video: Session) => {
+    console.log("🎥 [VideoLibrary] Playing video:", {
+      id: video.id,
+      title: video.title,
+      videoUrl: video.videoUrl,
+      thumbnailUrl: (video as any).thumbnailUrl,
+      durationMin: video.durationMin,
+      style: video.style,
+    });
     navigation.navigate(Routes.COMMON_PLAYER, {
       session: video,
       context: { programId: "video-library" },
@@ -202,6 +140,14 @@ export default function VideoLibraryScreen() {
         </View>
         <View style={{ width: 40 }} />
       </View>
+
+      {/* Loading Indicator */}
+      {loading && (
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="small" color="#16A34A" />
+          <Text style={styles.loadingText}>Loading videos...</Text>
+        </View>
+      )}
 
       {/* Filter Tabs */}
       <View style={styles.filterContainer}>
@@ -239,7 +185,22 @@ export default function VideoLibraryScreen() {
         contentContainerStyle={styles.container}
         showsVerticalScrollIndicator={false}
       >
-        {filteredVideos.length === 0 ? (
+        {error && !loading ? (
+          <View style={styles.errorState}>
+            <Ionicons name="alert-circle-outline" size={20} color="#DC2626" />
+            <Text style={styles.errorTitle}>Failed to load videos</Text>
+            <Text style={styles.errorSubtitle}>
+              Check backend + login, then try again.
+            </Text>
+            <TouchableOpacity
+              style={styles.retryButton}
+              onPress={fetchVideos}
+              activeOpacity={0.8}
+            >
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        ) : filteredVideos.length === 0 ? (
           <View style={styles.emptyState}>
             <Ionicons name="videocam-outline" size={48} color="#9CA3AF" />
             <Text style={styles.emptyTitle}>No videos found</Text>
@@ -257,7 +218,7 @@ export default function VideoLibraryScreen() {
                 activeOpacity={0.8}
               >
                 <View style={styles.videoThumbnailContainer}>
-                  <Image source={{ uri: THUMBNAIL }} style={styles.videoThumbnail} />
+                  <Image source={{ uri: (video as any).thumbnailUrl || THUMBNAIL }} style={styles.videoThumbnail} />
                   <View style={styles.playOverlay}>
                     <View style={styles.playCircle}>
                       <Ionicons name="play" size={20} color="#FFF" />
@@ -340,6 +301,40 @@ const styles = StyleSheet.create({
     color: "#111827",
   },
 
+  loadingContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#F0FDF4",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+
+  loadingText: {
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#16A34A",
+  },
+
+  errorContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 10,
+    backgroundColor: "#FFF7ED",
+    borderBottomWidth: 1,
+    borderBottomColor: "rgba(0,0,0,0.05)",
+  },
+
+  errorText: {
+    marginLeft: 8,
+    fontSize: 13,
+    fontWeight: "600",
+    color: "#E9A46A",
+  },
+
   filterContainer: {
     backgroundColor: "#FFF",
     borderBottomWidth: 1,
@@ -401,6 +396,35 @@ const styles = StyleSheet.create({
     color: "#6B7280",
     marginTop: 8,
     textAlign: "center",
+  },
+  errorState: {
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: 60,
+  },
+  errorTitle: {
+    fontSize: 16,
+    fontWeight: "800",
+    color: "#111827",
+    marginTop: 12,
+  },
+  errorSubtitle: {
+    fontSize: 13,
+    color: "#6B7280",
+    marginTop: 8,
+    textAlign: "center",
+  },
+  retryButton: {
+    marginTop: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 10,
+    backgroundColor: "#16A34A",
+    borderRadius: 999,
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontSize: 14,
+    fontWeight: "700",
   },
 
   videoGrid: {

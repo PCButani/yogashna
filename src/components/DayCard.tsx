@@ -25,6 +25,7 @@ export type DayCardSession = {
   style?: string;
   sequenceType?: "warmup" | "main" | "cooldown";
   completed?: boolean;
+  unavailable?: boolean;
 };
 
 export type DayCardProps = {
@@ -123,6 +124,7 @@ export default function DayCard({
       <View style={styles.sessionsWrap}>
         {sessions.map((session, idx) => {
           const sessionCompleted = session.completed || isCompleted;
+          const isUnavailable = !!session.unavailable;
 
           return (
             <TouchableOpacity
@@ -130,9 +132,10 @@ export default function DayCard({
               style={[
                 styles.sessionTile,
                 sessionCompleted && styles.sessionTileCompleted,
+                isUnavailable && styles.sessionTileUnavailable,
               ]}
               onPress={() => onPlaySession(idx)}
-              disabled={isLocked}
+              disabled={isLocked || isUnavailable}
               activeOpacity={0.7}
             >
               <View style={styles.sessionIcon}>
@@ -142,7 +145,11 @@ export default function DayCard({
                   }
                   size={20}
                   color={
-                    isLocked ? "#D1D5DB" : sessionCompleted ? "#2E6B4F" : "#2E6B4F"
+                    isLocked || isUnavailable
+                      ? "#D1D5DB"
+                      : sessionCompleted
+                      ? "#2E6B4F"
+                      : "#2E6B4F"
                   }
                 />
               </View>
@@ -151,6 +158,7 @@ export default function DayCard({
                   style={[
                     styles.sessionTitle,
                     isLocked && styles.sessionTitleLocked,
+                    isUnavailable && styles.sessionTitleLocked,
                   ]}
                   numberOfLines={1}
                 >
@@ -167,11 +175,14 @@ export default function DayCard({
                     </>
                   )}
                 </View>
+                {isUnavailable && (
+                  <Text style={styles.sessionUnavailable}>Video unavailable</Text>
+                )}
               </View>
               <Ionicons
                 name="chevron-forward"
                 size={18}
-                color={isLocked ? "#D1D5DB" : "#9CA3AF"}
+                color={isLocked || isUnavailable ? "#D1D5DB" : "#9CA3AF"}
               />
             </TouchableOpacity>
           );
@@ -293,6 +304,9 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F9F5",
     borderColor: "#C6E7D3",
   },
+  sessionTileUnavailable: {
+    opacity: 0.6,
+  },
   sessionIcon: {
     marginRight: 10,
   },
@@ -316,6 +330,12 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#6B7280",
     fontWeight: "600",
+  },
+  sessionUnavailable: {
+    marginTop: 4,
+    fontSize: 12,
+    fontWeight: "600",
+    color: "#DC2626",
   },
   sessionDot: {
     width: 3,

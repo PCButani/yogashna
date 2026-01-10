@@ -25,7 +25,7 @@ export interface ScheduleSession {
   durationMin: number;
   style: YogaStyle;
   focusTags: string[];
-  videoUrl: string;
+  videoId?: string;
 }
 
 export interface ScheduleDay {
@@ -41,10 +41,6 @@ export interface ProgramTemplateSchedule {
   avgDailyMinutes: number;
   days: ScheduleDay[];
 }
-
-// Sample video URL
-const VIDEO =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
 
 // Helper to generate day list with completed/current/locked states
 function buildDays(
@@ -86,7 +82,6 @@ function buildDays(
         durationMin: sessionType.duration + ((i - 1) % 3) * 2,
         style: styles[styleIndex],
         focusTags: focusTags[tagsIndex],
-        videoUrl: VIDEO,
       });
     }
 

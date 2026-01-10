@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "192332349396",
+    "project_id": "yogashna",
+    "storage_bucket": "yogashna.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:192332349396:android:YOUR_ANDROID_APP_ID",
+        "android_client_info": {
+          "package_name": "com.dugmates.yogashna"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAUeVmyZ6UGbdfO3Y4ZBlnrMHd7o6DfRKI"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

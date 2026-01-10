@@ -28,10 +28,11 @@ import {
   mergePreferencesWithUserMe,
   type PracticePreferences,
 } from "../../services/PracticePreferences";
-import { generateTodaysAbhyasa } from "../../services/AbhyasaGenerator";
 import { useProgressStore } from "../../store/useProgressStore";
 import { useContinueWatchingStore } from "../../store/useContinueWatchingStore";
-import { getProfile } from "../../services/api";
+import { getAbhyasaToday, getProfile } from "../../services/api";
+import { getProgramTemplateForPreferences } from "../../services/AbhyasaCycleService";
+import type { AbhyasaPlaylistItem } from "../../data/models/ProgramTemplate";
 
 const { width } = Dimensions.get("window");
 
@@ -61,6 +62,9 @@ export default function TodayScreen() {
   /* -------------------- STATE -------------------- */
   const [preferences, setPreferences] = useState<PracticePreferences | null>(null);
   const [loading, setLoading] = useState(true);
+  const [abhyasaPlaylist, setAbhyasaPlaylist] = useState<AbhyasaPlaylistItem[]>([]);
+  const [abhyasaLoading, setAbhyasaLoading] = useState(false);
+  const [abhyasaError, setAbhyasaError] = useState<string | null>(null);
 
   /* -------------------- STORES -------------------- */
   const today = new Date().toISOString().split("T")[0];
@@ -87,7 +91,9 @@ export default function TodayScreen() {
         console.warn("Profile fetch failed, using local preferences:", error);
       }
       const prefs = await getPracticePreferences();
-      setPreferences(mergePreferencesWithUserMe(prefs, userMe));
+      const merged = mergePreferencesWithUserMe(prefs, userMe);
+      setPreferences(merged);
+      fetchTodayAbhyasa(merged);
     } catch (e) {
       console.warn("Preferences not found yet");
       setPreferences(null);
@@ -96,14 +102,65 @@ export default function TodayScreen() {
     }
   };
 
-  /* -------------------- ACTIONS -------------------- */
-  const handlePlayTodaysAbhyasa = () => {
-    if (!preferences) return;
+  const fetchTodayAbhyasa = async (prefs: PracticePreferences | null) => {
+    if (!prefs) return;
+    const template = getProgramTemplateForPreferences(prefs);
+    if (!template?.id) {
+      setAbhyasaError("Unable to determine your program.");
+      setAbhyasaPlaylist([]);
+      return;
+    }
 
-    const playlist = generateTodaysAbhyasa(preferences);
+    try {
+      setAbhyasaLoading(true);
+      setAbhyasaError(null);
+      const response = await getAbhyasaToday(template.id);
+
+      if (response?.exists === false) {
+        setAbhyasaError("No Abhyasa day available yet.");
+        setAbhyasaPlaylist([]);
+        return;
+      }
+
+      if (response?.isLocked) {
+        setAbhyasaError("Today's Abhyasa is locked.");
+        setAbhyasaPlaylist([]);
+        return;
+      }
+
+      const playlist: AbhyasaPlaylistItem[] = (response?.playlistItems || []).map(
+        (item: any) => ({
+          id: item.videoAsset?.id || `abhyasa-${response?.dayNumber}-${item.order || 0}`,
+          title: item.videoAsset?.title || "Session",
+          durationMin: Math.max(1, Math.round((item.durationSec || 0) / 60)),
+          style: "Yoga",
+          focusTags: [],
+          videoUrl: item.videoAsset?.playbackUrl || "",
+          thumbnailUrl: item.videoAsset?.thumbnailUrl ?? null,
+        })
+      );
+
+      setAbhyasaPlaylist(playlist);
+    } catch (error) {
+      console.warn("Failed to load today's Abhyasa:", error);
+      setAbhyasaError("Failed to load today's Abhyasa. Check backend + login.");
+      setAbhyasaPlaylist([]);
+    } finally {
+      setAbhyasaLoading(false);
+    }
+  };
+
+  /* -------------------- ACTIONS -------------------- */
+  const hasValidPlaylist =
+    abhyasaPlaylist.length > 0 && abhyasaPlaylist.every((item) => !!item.videoUrl);
+  const canShowUnavailable =
+    !!preferences && !abhyasaLoading && !abhyasaError && !hasValidPlaylist;
+
+  const handlePlayTodaysAbhyasa = () => {
+    if (!hasValidPlaylist) return;
 
     navigation.navigate(Routes.COMMON_PLAYER, {
-      playlist,
+      playlist: abhyasaPlaylist,
       startIndex: 0,
       context: { programId: "today" },
     });
@@ -230,12 +287,33 @@ export default function TodayScreen() {
           </View>
 
           <TouchableOpacity
-            style={styles.primaryBtn}
+            style={[
+              styles.primaryBtn,
+              (abhyasaLoading || !hasValidPlaylist) && styles.primaryBtnDisabled,
+            ]}
             onPress={handlePlayTodaysAbhyasa}
+            disabled={abhyasaLoading || !hasValidPlaylist}
           >
             <Ionicons name="play-circle" size={20} color="#FFF" />
             <Text style={styles.primaryBtnText}>Start Practice</Text>
           </TouchableOpacity>
+          {abhyasaLoading && (
+            <Text style={styles.videoLoadingText}>Loading today's playlist…</Text>
+          )}
+          {!abhyasaLoading && abhyasaError && (
+            <View style={styles.videoErrorWrap}>
+              <Text style={styles.videoUnavailableText}>{abhyasaError}</Text>
+              <TouchableOpacity
+                style={styles.retryButton}
+                onPress={() => fetchTodayAbhyasa(preferences)}
+              >
+                <Text style={styles.retryButtonText}>Retry</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+          {canShowUnavailable && (
+            <Text style={styles.videoUnavailableText}>Video unavailable</Text>
+          )}
         </TouchableOpacity>
 
         {/* CONTINUE WATCHING */}
@@ -423,8 +501,40 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: 8,
   },
+  primaryBtnDisabled: {
+    opacity: 0.6,
+  },
 
   primaryBtnText: { color: "#FFF", fontSize: 16, fontWeight: "900" },
+  videoLoadingText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#6B7280",
+    textAlign: "center",
+  },
+  videoUnavailableText: {
+    marginTop: 8,
+    fontSize: 12,
+    fontWeight: "700",
+    color: "#DC2626",
+    textAlign: "center",
+  },
+  videoErrorWrap: {
+    alignItems: "center",
+  },
+  retryButton: {
+    marginTop: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
+  },
 
   continueCard: {
     backgroundColor: "#FFF",

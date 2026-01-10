@@ -29,7 +29,14 @@ export default function CommonPlayerScreen() {
 
   // --- 1. Data Preparation ---
   const params = route?.params || {};
-  
+
+  console.log("🎬 [Player] Route params received:", {
+    hasPlaylist: !!params.playlist,
+    hasSession: !!params.session,
+    startIndex: params.startIndex,
+    context: params.context,
+  });
+
   const playlist = useMemo(() => {
     if (params.playlist?.length) return params.playlist;
     if (params.session) return [params.session];
@@ -40,13 +47,21 @@ export default function CommonPlayerScreen() {
   const currentItem = playlist[currentIndex];
 
   const videoUri = useMemo(() => {
-    return (
+    const uri = (
       currentItem?.videoUrl ||
       currentItem?.videoUri ||
       currentItem?.uri ||
       currentItem?.url ||
       ""
     );
+    console.log("🎬 [Player] Final video URI for playback:", uri);
+    console.log("🎬 [Player] Current item fields:", {
+      id: currentItem?.id,
+      title: currentItem?.title,
+      videoUrl: currentItem?.videoUrl,
+      thumbnailUrl: currentItem?.thumbnailUrl,
+    });
+    return uri;
   }, [currentItem]);
 
   const videoId = currentItem?.id || currentItem?.videoId || videoUri;
@@ -63,8 +78,31 @@ export default function CommonPlayerScreen() {
     p.loop = false;
   });
 
+  // Log when videoUri changes to track player updates
+  useEffect(() => {
+    console.log("🎬 [Player] VideoUri changed:", videoUri ? `${videoUri.substring(0, 50)}...` : "EMPTY");
+  }, [videoUri]);
+
   const updateContinuePosition = useContinueWatchingStore((s) => s.updatePosition);
-  
+
+  // --- 2.5. Error Handling ---
+  useEffect(() => {
+    if (!player) return;
+
+    const errorListener = player.addListener("statusChange", (status, oldStatus, error) => {
+      if (error) {
+        console.error("🎬 [Player] PLAYBACK ERROR:", {
+          error: error.message || error,
+          videoUri,
+          status,
+          oldStatus,
+        });
+      }
+    });
+
+    return () => errorListener.remove();
+  }, [player, videoUri]);
+
   // --- 3. Resume Logic ---
   useEffect(() => {
     if (!player || !videoId) return;

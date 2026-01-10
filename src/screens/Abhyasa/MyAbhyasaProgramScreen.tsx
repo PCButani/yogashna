@@ -21,15 +21,14 @@ import { useNavigation } from "@react-navigation/native";
 import type { NativeStackNavigationProp } from "@react-navigation/native-stack";
 import type { RootStackParamList } from "../../types/navigation";
 
-import {
-  getAbhyasaCycle,
-} from "../../services/AbhyasaCycleService";
+import { getProgramTemplateForPreferences } from "../../services/AbhyasaCycleService";
 import { getProgramTemplateById } from "../../data/sources/ProgramTemplates";
-import { getPracticePreferences } from "../../services/PracticePreferences";
+import { getPracticePreferences, type PracticePreferences } from "../../services/PracticePreferences";
 import { getProgressData } from "../../services/ProgressTracking";
 import type { AbhyasaCycle, AbhyasaDayPlan, ProgramTemplate } from "../../data/models/ProgramTemplate";
 import { Routes } from "../../constants/routes";
 import DayCard, { type DayCardSession, type DayCardStatus } from "../../components/DayCard";
+import { getAbhyasaCycleSummary, getAbhyasaDay } from "../../services/api";
 
 type NavigationProp = NativeStackNavigationProp<RootStackParamList>;
 
@@ -40,6 +39,7 @@ export default function MyAbhyasaProgramScreen() {
   const [cycle, setCycle] = useState<AbhyasaCycle | null>(null);
   const [programTemplate, setProgramTemplate] = useState<ProgramTemplate | null>(null);
   const [completedDays, setCompletedDays] = useState<Set<number>>(new Set());
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     loadCycle();
@@ -48,28 +48,67 @@ export default function MyAbhyasaProgramScreen() {
   const loadCycle = async () => {
     try {
       setLoading(true);
+      setError(null);
       const [preferences, progressData] = await Promise.all([
         getPracticePreferences(),
         getProgressData(),
       ]);
 
-      const abhyasaCycle = await getAbhyasaCycle(preferences);
-      const template = getProgramTemplateById(abhyasaCycle.programTemplateId);
+      const template = getProgramTemplateForPreferences(preferences);
+      if (!template?.id) {
+        setError("Unable to determine your program.");
+        setCycle(null);
+        return;
+      }
+
+      const summary = await getAbhyasaCycleSummary(template.id);
+      if (!summary?.hasCycle) {
+        setError("No Abhyasa cycle found. Please try again.");
+        setCycle(null);
+        return;
+      }
+
+      const totalDays = summary.cycleLengthDays || 21;
+      const dayResponses = await Promise.all(
+        Array.from({ length: totalDays }, (_, idx) => getAbhyasaDay(template.id, idx + 1))
+      );
+
+      const days: AbhyasaDayPlan[] = dayResponses.map((response: any, index) =>
+        mapDayPlan(response, index + 1)
+      );
+
+      const minutesPreference = getMinutesFromLength(preferences.length);
+      const abhyasaCycle: AbhyasaCycle = {
+        id: summary.cycleId || `cycle_${Date.now()}`,
+        userId: "remote",
+        programTemplateId: template.id,
+        days,
+        minutesPreference,
+        startDate: summary.startDate || new Date().toISOString(),
+        generatedAt: new Date().toISOString(),
+        version: "remote",
+        completedDays: 0,
+        currentDayNumber: 1,
+      };
 
       setCycle(abhyasaCycle);
-      setProgramTemplate(template);
+      setProgramTemplate(getProgramTemplateById(template.id));
 
       // Mark completed days (mock for now)
       const completed = new Set<number>();
       setCompletedDays(completed);
     } catch (error) {
       console.error("Failed to load cycle:", error);
+      setError("Failed to load your Abhyasa program. Check backend + login.");
     } finally {
       setLoading(false);
     }
   };
 
   const handlePlayDay = (day: AbhyasaDayPlan) => {
+    const hasMissing =
+      day.sessions.length === 0 || day.sessions.some((session) => !session.videoUrl);
+    if (hasMissing) return;
     navigation.navigate(Routes.COMMON_PLAYER, {
       playlist: day.sessions,
       startIndex: 0,
@@ -78,6 +117,8 @@ export default function MyAbhyasaProgramScreen() {
   };
 
   const handlePlaySession = (day: AbhyasaDayPlan, sessionIndex: number) => {
+    const session = day.sessions[sessionIndex];
+    if (!session?.videoUrl) return;
     navigation.navigate(Routes.COMMON_PLAYER, {
       playlist: day.sessions,
       startIndex: sessionIndex,
@@ -86,6 +127,18 @@ export default function MyAbhyasaProgramScreen() {
   };
 
   if (loading || !cycle) {
+    if (!loading && error) {
+      return (
+        <SafeAreaView style={styles.safe}>
+          <View style={styles.loadingContainer}>
+            <Text style={styles.loadingText}>{error}</Text>
+            <TouchableOpacity style={styles.retryButton} onPress={loadCycle}>
+              <Text style={styles.retryButtonText}>Retry</Text>
+            </TouchableOpacity>
+          </View>
+        </SafeAreaView>
+      );
+    }
     return (
       <SafeAreaView style={styles.safe}>
         <View style={styles.loadingContainer}>
@@ -218,6 +271,7 @@ export default function MyAbhyasaProgramScreen() {
                     style: session.style,
                     sequenceType: session.sequenceType,
                     completed: isCompleted,
+                    unavailable: !session.videoUrl,
                   }));
 
                   // Determine status
@@ -236,7 +290,10 @@ export default function MyAbhyasaProgramScreen() {
                       status={status}
                       onPlayDay={() => handlePlayDay(day)}
                       onPlaySession={(sessionIndex) => handlePlaySession(day, sessionIndex)}
-                      showPlayButton={true}
+                      showPlayButton={
+                        day.sessions.length > 0 &&
+                        !day.sessions.some((session) => !session.videoUrl)
+                      }
                     />
                   );
                 })}
@@ -249,6 +306,59 @@ export default function MyAbhyasaProgramScreen() {
       </ScrollView>
     </SafeAreaView>
   );
+}
+
+function mapDayPlan(response: any, dayNumber: number): AbhyasaDayPlan {
+  if (!response || response.exists === false) {
+    return {
+      dayNumber,
+      theme: getDayTheme(undefined, dayNumber),
+      sessions: [],
+      totalDuration: 0,
+      isCompleted: false,
+    };
+  }
+
+  const sessions = (response.playlistItems || []).map((item: any) => ({
+    id: item.videoAsset?.id || `abhyasa-${dayNumber}-${item.order || 0}`,
+    title: item.videoAsset?.title || "Session",
+    durationMin: Math.max(1, Math.round((item.durationSec || 0) / 60)),
+    style: "Yoga",
+    focusTags: [],
+    videoUrl: item.videoAsset?.playbackUrl || "",
+    thumbnailUrl: item.videoAsset?.thumbnailUrl ?? null,
+  }));
+
+  return {
+    dayNumber: response.dayNumber || dayNumber,
+    theme: getDayTheme(response.dayType, dayNumber),
+    sessions,
+    totalDuration: Math.max(0, Math.round((response.totalDurationSec || 0) / 60)),
+    isCompleted: false,
+  };
+}
+
+function getDayTheme(dayType?: string | null, dayNumber?: number): string {
+  if (dayType === "GENTLE") return "Gentle";
+  if (dayType === "BUILD") return "Building Strength";
+  if (dayType === "RESTORE") return "Restore";
+
+  if (!dayNumber) return "Practice";
+  const week = Math.ceil(dayNumber / 7);
+  return getWeekTheme(week);
+}
+
+function getMinutesFromLength(length: PracticePreferences["length"]): number {
+  switch (length) {
+    case "Quick":
+      return 10;
+    case "Balanced":
+      return 20;
+    case "Deep":
+      return 30;
+    default:
+      return 20;
+  }
 }
 
 function getWeekTheme(week: number): string {
@@ -359,6 +469,18 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#6B7280",
     fontWeight: "600",
+  },
+  retryButton: {
+    marginTop: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 999,
+    backgroundColor: "#111827",
+  },
+  retryButtonText: {
+    color: "#FFF",
+    fontSize: 12,
+    fontWeight: "700",
   },
 
   programTitle: {

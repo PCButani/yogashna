@@ -11,6 +11,8 @@ export class AbhyasaDayVideoAssetDto {
   id: string;
   title: string;
   streamUid: string;
+  playbackUrl: string | null;
+  thumbnailUrl: string | null;
 }
 
 export class AbhyasaDayPlaylistItemDto {

@@ -37,6 +37,7 @@ import {
 } from './dto/abhyasa-playlist-generate-range.dto';
 import { SubscriptionPolicyService } from './subscription-policy.service';
 import { PlaylistSelectionService } from '../common/playlist/playlist-selection.service';
+import { AssetsService } from '../assets/assets.service';
 
 type PlaylistCandidate = {
   id: string;
@@ -65,6 +66,7 @@ export class AbhyasaCycleService {
     private readonly prisma: PrismaService,
     private readonly subscriptionPolicyService: SubscriptionPolicyService,
     private readonly playlistSelectionService: PlaylistSelectionService,
+    private readonly assetsService: AssetsService,
   ) {}
 
   async getCycleSummary(
@@ -157,6 +159,7 @@ export class AbhyasaCycleService {
                 id: true,
                 name: true,
                 streamUid: true,
+                thumbnailKey: true,
               },
             },
           },
@@ -168,16 +171,29 @@ export class AbhyasaCycleService {
       return { exists: false, dayNumber };
     }
 
-    const playlistItems = dayPlan.playlistItems.map((item, index) => ({
-      order: index + 1,
-      role: item.sequenceRole,
-      durationSec: item.durationSec,
-      videoAsset: {
-        id: item.videoAsset.id,
-        title: item.videoAsset.name,
-        streamUid: item.videoAsset.streamUid,
-      },
-    }));
+    const playlistItems = await Promise.all(
+      dayPlan.playlistItems.map(async (item, index) => {
+        const playbackUrl = item.videoAsset.streamUid
+          ? await this.assetsService.getStreamPlaybackUrl(item.videoAsset.streamUid)
+          : null;
+        const thumbnailUrl = item.videoAsset.thumbnailKey
+          ? await this.assetsService.getR2SignedUrl(item.videoAsset.thumbnailKey)
+          : null;
+
+        return {
+          order: index + 1,
+          role: item.sequenceRole,
+          durationSec: item.durationSec,
+          videoAsset: {
+            id: item.videoAsset.id,
+            title: item.videoAsset.name,
+            streamUid: item.videoAsset.streamUid,
+            playbackUrl,
+            thumbnailUrl,
+          },
+        };
+      })
+    );
 
     return {
       dayNumber: dayPlan.dayNumber,
@@ -905,6 +921,7 @@ export class AbhyasaCycleService {
                 id: true,
                 name: true,
                 streamUid: true,
+                thumbnailKey: true,
               },
             },
           },
@@ -916,16 +933,29 @@ export class AbhyasaCycleService {
       return { exists: false, dayNumber };
     }
 
-    const playlistItems = dayPlan.playlistItems.map((item, index) => ({
-      order: index + 1,
-      role: item.sequenceRole,
-      durationSec: item.durationSec,
-      videoAsset: {
-        id: item.videoAsset.id,
-        title: item.videoAsset.name,
-        streamUid: item.videoAsset.streamUid,
-      },
-    }));
+    const playlistItems = await Promise.all(
+      dayPlan.playlistItems.map(async (item, index) => {
+        const playbackUrl = item.videoAsset.streamUid
+          ? await this.assetsService.getStreamPlaybackUrl(item.videoAsset.streamUid)
+          : null;
+        const thumbnailUrl = item.videoAsset.thumbnailKey
+          ? await this.assetsService.getR2SignedUrl(item.videoAsset.thumbnailKey)
+          : null;
+
+        return {
+          order: index + 1,
+          role: item.sequenceRole,
+          durationSec: item.durationSec,
+          videoAsset: {
+            id: item.videoAsset.id,
+            title: item.videoAsset.name,
+            streamUid: item.videoAsset.streamUid,
+            playbackUrl,
+            thumbnailUrl,
+          },
+        };
+      })
+    );
 
     return {
       dayNumber: dayPlan.dayNumber,

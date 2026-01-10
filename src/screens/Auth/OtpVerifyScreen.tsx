@@ -16,6 +16,7 @@ import {
 import { useNavigation, useRoute } from "@react-navigation/native";
 import { Ionicons } from "@expo/vector-icons";
 import { getConfirmationResult } from "./AuthEntryScreen";
+import auth from "@react-native-firebase/auth";
 
 type Mode = "login" | "signup";
 
@@ -66,7 +67,7 @@ export default function OtpVerifyScreen() {
 
       console.log("🔑 Verifying OTP:", otp);
 
-      // Confirm the OTP
+      // Confirm the OTP with native Firebase
       const userCredential = await confirmationResult.confirm(otp);
       const user = userCredential.user;
 
@@ -139,8 +140,7 @@ export default function OtpVerifyScreen() {
             style={styles.logoutBtn}
             onPress={async () => {
               try {
-                const { auth } = require("../../config/firebase");
-                await auth.signOut();
+                await auth().signOut();
                 console.log("✅ Logged out successfully");
 
                 // Navigate to auth entry

@@ -17,10 +17,6 @@ import { getProgramTemplateById } from "../data/sources/ProgramTemplates";
 const CYCLE_CACHE_KEY = "ABHYASA_CYCLE";
 const CYCLE_VERSION_KEY = "ABHYASA_CYCLE_VERSION";
 
-// Sample video URL
-const VIDEO_URL =
-  "https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4";
-
 /**
  * Map user's practice preferences to a ProgramTemplate
  */
@@ -246,7 +242,7 @@ function generateDaySessions(
     durationMin: warmupMin,
     style: "Hatha",
     focusTags: ["Gentle Movement", "Joint Mobility", "Breath Awareness"],
-    videoUrl: VIDEO_URL,
+    videoUrl: "",
     sequenceType: "warmup",
   });
 
@@ -258,7 +254,7 @@ function generateDaySessions(
     durationMin: mainMin,
     style: getMainPracticeStyle(level, week),
     focusTags: getMainPracticeTags(focus, primaryGoal, week),
-    videoUrl: VIDEO_URL,
+    videoUrl: "",
     sequenceType: "main",
   });
 
@@ -270,7 +266,7 @@ function generateDaySessions(
     durationMin: cooldownMin,
     style: "Restorative",
     focusTags: ["Deep Relaxation", "Breath Work", "Integration"],
-    videoUrl: VIDEO_URL,
+    videoUrl: "",
     sequenceType: "cooldown",
   });
 
