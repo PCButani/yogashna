@@ -3,7 +3,7 @@
 <plist version="1.0">
 <dict>
 	<key>API_KEY</key>
-	<string>AIzaSyAUeVmyZ6UGbdfO3Y4ZBlnrMHd7o6DfRKI</string>
+	<string>AIzaSyAZspODiPk-12z3u7CM9elqF4wv-6LInS0</string>
 	<key>GCM_SENDER_ID</key>
 	<string>192332349396</string>
 	<key>PLIST_VERSION</key>
@@ -25,6 +25,6 @@
 	<key>IS_SIGNIN_ENABLED</key>
 	<true></true>
 	<key>GOOGLE_APP_ID</key>
-	<string>1:192332349396:ios:YOUR_IOS_APP_ID</string>
+	<string>1:192332349396:ios:5dc47ffcfa0e2544cce041</string>
 </dict>
 </plist>

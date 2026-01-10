@@ -7,7 +7,7 @@
   "client": [
     {
       "client_info": {
-        "mobilesdk_app_id": "1:192332349396:android:YOUR_ANDROID_APP_ID",
+        "mobilesdk_app_id": "1:192332349396:android:f328fb25fa2ca0d2cce041",
         "android_client_info": {
           "package_name": "com.dugmates.yogashna"
         }
@@ -15,7 +15,7 @@
       "oauth_client": [],
       "api_key": [
         {
-          "current_key": "AIzaSyAUeVmyZ6UGbdfO3Y4ZBlnrMHd7o6DfRKI"
+          "current_key": "AIzaSyDz8Aq12lStwQjGd0zM0NCnnDQn7Of13KE"
         }
       ],
       "services": {
